@@ -1,157 +1,121 @@
 # Chrome Home Dashboard
 
-Beranda kustom interaktif untuk Google Chrome dan berbagai peramban modern lainnya. Dilengkapi dengan jendela widget bebas geser (*movable window*), jam digital & kalender, jadwal sholat otomatis, cuaca real-time, to-do list, catatan cepat, pintasan aplikasi (*shortcuts*), serta kustomisasi wallpaper latar belakang.
+Beranda kustom interaktif yang dirancang sebagai **Browser Extension (Ekstensi Chrome / Chromium)** dan juga dapat digunakan sebagai web dashboard mandiri. Dilengkapi dengan jendela widget bebas geser (*movable & resizable windows*), jam digital & kalender, jadwal sholat otomatis, cuaca real-time, to-do list, catatan cepat (*notes*), pintasan aplikasi (*shortcuts*), serta kustomisasi wallpaper latar belakang.
 
 ---
 
-## 🚀 Cara Pemasangan & Penggunaan
+## ⚡ Cara Paling Mudah: Pasang Langsung sebagai Ekstensi Browser
 
-Anda dapat menggunakan dashboard ini melalui dua metode: **Download dari GitHub Releases** (langsung pakai tanpa perlu install Node.js) atau **Git Clone & Build Manual** (untuk pengembang).
+Dengan adanya file `manifest.json` (Manifest V3), folder hasil build aplikasi ini dapat langsung dipasang sebagai ekstensi peramban untuk menggantikan halaman **Tab Baru (New Tab)** secara otomatis!
 
----
-
-### Metode 1: Download Langsung dari GitHub Releases (Direkomendasikan)
-
-Metode ini cocok jika Anda hanya ingin langsung memakai aplikasi tanpa memasang Node.js:
-
-1. Buka halaman **Releases** di repositori GitHub ini (di sebelah kanan halaman utama GitHub).
-2. Pada rilis versi terbaru (misalnya `v1.0.x`), unduh file arsip **`dist-v1.0.x.zip`**.
-3. Ekstrak file zip tersebut ke folder yang aman di komputer Anda, contoh:
-   - **Windows:** `C:\Users\<NamaAnda>\Documents\ChromeDashboard`
-   - **macOS / Linux:** `~/Documents/ChromeDashboard`
-4. Di dalam folder hasil ekstrak, Anda akan menemukan file `index.html` beserta folder `assets`.
-5. Siap digunakan! Lanjutkan ke bagian [Cara Memasang ke Browser](#-cara-memasang-ke-browser).
-
----
-
-### Metode 2: Git Clone & Build Manual (Untuk Pengembang)
-
-Gunakan metode ini jika Anda ingin memodifikasi kode sumber atau melakukan build sendiri:
-
-#### Prasyarat
-- [Node.js](https://nodejs.org/) (versi 18 atau 20 ke atas)
-- Git
-
-#### Langkah-langkah:
-1. **Clone repositori:**
-   ```bash
-   git clone https://github.com/<username>/<nama-repo>.git
-   cd <nama-repo>
-   ```
-
-2. **Install dependensi:**
-   ```bash
-   npm install
-   ```
-
-3. **Menjalankan server development (opsional untuk pratinjau langsung):**
-   ```bash
-   npm run dev
-   ```
-   Buka peramban di `http://localhost:3000`.
-
-4. **Build untuk produksi:**
-   ```bash
-   npm run build
-   ```
-   Hasil kompilasi siap pakai akan berada di folder **`dist/`**.
+### Langkah 1: Dapatkan File Ekstensi
+Pilih salah satu cara berikut:
+- **Download dari GitHub Releases (Tanpa Install Apapun):**
+  1. Buka tab **Releases** di repositori GitHub ini.
+  2. Unduh file `dist-v*.zip` versi terbaru.
+  3. Ekstrak file zip tersebut ke folder di komputer Anda (misal: `Documents/ChromeDashboard`).
+- **Atau Build Manual Sendiri:**
+  ```bash
+  git clone https://github.com/<username>/<nama-repo>.git
+  cd <nama-repo>
+  npm install
+  npm run build
+  ```
+  Folder `dist/` hasil build adalah folder ekstensi Anda.
 
 ---
 
-## 🌐 Cara Memasang ke Browser
+### Langkah 2: Pasang ke Browser Anda
 
-Ada beberapa cara untuk menjadikan dashboard ini sebagai halaman awal atau tab baru di peramban Anda.
+#### 🌐 1. Google Chrome & Brave Browser
+1. Buka browser dan ketik alamat berikut di address bar:
+   - Chrome: `chrome://extensions`
+   - Brave: `brave://extensions`
+2. Aktifkan sakelar **Mode Pengembang** (*Developer mode*) di pojok kanan atas.
+3. Klik tombol **Muat yang belum dibongkar** (*Load unpacked*) di pojok kiri atas.
+4. Pilih folder hasil ekstrak (folder `dist` yang berisi file `manifest.json` dan `index.html`).
+5. **Selesai!** Tekan `Ctrl + T` (atau `Cmd + T` di Mac) untuk membuka tab baru — Chrome Home Dashboard akan langsung tampil otomatis sebagai halaman tab baru Anda!
 
-### Opsi A: Menggunakan Ekstensi "Custom New Tab" (Paling Praktis untuk Tab Baru)
-Secara bawaan, Google Chrome dan peramban berbasis Chromium membatasi pembukaan file lokal langsung saat Anda menekan tombol *New Tab* (`Ctrl + T`). Cara terbaik dan termudah:
+#### 🌐 2. Microsoft Edge
+1. Buka `edge://extensions` di address bar.
+2. Di panel sebelah kiri bawah, aktifkan toggle **Mode Pengembang** (*Developer mode*).
+3. Klik tombol **Muat belum dibongkar** (*Load unpacked*).
+4. Pilih folder `dist`.
+5. Buka tab baru, dashboard siap digunakan.
 
-1. Pasang ekstensi pengarah New Tab dari Chrome Web Store, misalnya:
-   - **New Tab Redirect** atau **Custom New Tab URL**.
-2. Buka opsi/pengaturan ekstensi tersebut.
-3. Masukkan alamat file `index.html` Anda:
-   - Contoh format Windows: `file:///C:/Users/<NamaAnda>/Documents/ChromeDashboard/index.html`
-   - Contoh format Mac/Linux: `file:///Users/<NamaAnda>/Documents/ChromeDashboard/index.html`
-4. Simpan, lalu setiap kali Anda membuka tab baru, dashboard akan otomatis muncul!
+#### 🌐 3. Opera / Vivaldi
+1. Buka menu Extensions (`opera://extensions` atau `vivaldi://extensions`).
+2. Aktifkan **Developer Mode**.
+3. Klik **Load unpacked** dan pilih folder `dist`.
 
----
-
-### Opsi B: Mengatur sebagai Halaman Saat Memulai (On Startup) & Tombol Beranda (Home)
-
-Jika Anda ingin dashboard otomatis terbuka setiap kali peramban baru dibuka:
-
-#### 1. Google Chrome
-- **Halaman Mulai (On Startup):**
-  1. Buka menu titik tiga di kanan atas > **Setelan** (*Settings*).
-  2. Pilih menu **Saat memulai** (*On startup*) di panel kiri (atau ketik `chrome://settings/onStartup`).
-  3. Pilih **Buka halaman tertentu atau sekumpulan halaman** (*Open a specific page or set of pages*).
-  4. Klik **Tambahkan halaman baru** (*Add a new page*).
-  5. Masukkan path file lokal:
-     `file:///C:/path/ke/folder/dist/index.html` (sesuaikan dengan lokasi file Anda).
-- **Tombol Beranda (Home Button):**
-  1. Di Setelan Chrome, buka tab **Tampilan** (*Appearance*) (`chrome://settings/appearance`).
-  2. Aktifkan sakelar **Tampilkan tombol Beranda** (*Show Home button*).
-  3. Masukkan path file lokal Anda pada kolom URL kustom.
-
-#### 2. Microsoft Edge
-- Buka `edge://settings/startHomeOpenTabs`.
-- Di bagian **Saat Edge dimulai**, pilih **Buka halaman ini** > **Tambahkan halaman baru** > masukkan path `file:///.../index.html`.
-- Buka `edge://settings/appearance`, aktifkan **Tombol beranda** dan masukkan path file yang sama.
-
-#### 3. Mozilla Firefox
-- Buka **Pengaturan** (`about:preferences#home`).
-- Pada bagian **Halaman beranda dan jendela baru** (*Homepage and new windows*):
-  - Pilih menu tarik-turun: **URL Khusus...** (*Custom URLs...*).
-  - Masukkan path `file:///.../index.html`.
-
-#### 4. Brave Browser
-- Buka **Setelan** > **Memulai** (`brave://settings/getStarted`).
-- Pilih **Buka halaman tertentu** lalu tambahkan file `index.html`.
-- Pada menu **Tampilan** (`brave://settings/appearance`), aktifkan tombol Beranda dan masukkan path `file:///.../index.html`.
+#### 🦊 4. Mozilla Firefox (Mode Add-on Sementara)
+1. Buka `about:debugging#/runtime/this-firefox`.
+2. Klik tombol **Load Temporary Add-on...**.
+3. Masuk ke dalam folder `dist` dan pilih file `manifest.json`.
 
 ---
 
-### Opsi C: Menjalankan Server Lokal (Rekomendasi untuk Fleksibilitas Penuh)
+## 💻 Penggunaan Alternatif (Tanpa Memasang Ekstensi)
 
-Agar tidak dibatasi oleh protokol `file://`, Anda dapat menjalankan web server mini:
+Jika Anda tidak ingin memasangnya sebagai ekstensi, dashboard tetap bisa digunakan melalui cara berikut:
 
+### Opsi A: Atur sebagai Halaman Mulai (On Startup) / Tombol Home
+- **Chrome:** Buka `chrome://settings/onStartup` > Pilih *Buka halaman tertentu* > Tambahkan path:
+  `file:///C:/lokasi/folder/dist/index.html`
+- **Firefox:** Buka `about:preferences#home` > Pada *Halaman beranda dan jendela baru*, pilih *URL Khusus* dan masukkan path `file:///.../index.html`.
+
+### Opsi B: Jalankan dengan Web Server Lokal
 ```bash
-# Menjalankan langsung folder dist dengan npx serve
+# Menjalankan folder dist dengan npx serve
 npx serve dist -p 5000
 ```
-Setelah itu, Anda cukup menyetel URL ke `http://localhost:5000` di peramban Anda.
+Buka browser di `http://localhost:5000`.
+
+### Opsi C: Deploy Gratis ke Cloud (GitHub Pages / Vercel / Netlify)
+- Unggah kode ke GitHub dan aktifkan **GitHub Pages** di tab *Settings > Pages*.
+- Atau hubungkan ke Vercel/Netlify dengan build command `npm run build` dan output `dist`.
 
 ---
 
-### Opsi D: Deploy Gratis ke GitHub Pages / Vercel / Netlify
+## 🛠️ Panduan Pengembangan (Development)
 
-Anda juga dapat mengunggah folder hasil build ke layanan hosting gratis:
-- **GitHub Pages:** Di pengaturan repositori GitHub Anda (**Settings** > **Pages**), aktifkan GitHub Pages dari branch rilis atau workflow deploy.
-- **Vercel / Netlify:** Hubungkan repositori GitHub Anda dan set build command ke `npm run build` serta output directory ke `dist`.
-- Anda akan mendapatkan link permanen (contoh: `https://username.github.io/repo-name/`) yang bisa dijadikan *Home* di semua perangkat Anda, termasuk ponsel dan laptop lain.
+Bagi pengembang yang ingin mengubah kode, menambah widget, atau mengutak-atik tampilan:
+
+```bash
+# 1. Clone repositori
+git clone https://github.com/<username>/<nama-repo>.git
+cd <nama-repo>
+
+# 2. Install dependensi
+npm install
+
+# 3. Jalankan development server dengan auto-reload
+npm run dev
+# Dashboard dapat diakses di http://localhost:3000
+
+# 4. Build ekstensi produksi
+npm run build
+# Hasil build siap pasang akan dibuat di folder dist/ lengkap dengan manifest.json & icon
+```
+
+### Struktur File Ekstensi
+- `public/manifest.json`: Konfigurasi Manifest V3 untuk Chrome Extension (`chrome_url_overrides.newtab`).
+- `public/icons/`: Ikon ekstensi berukuran 16x16, 48x48, dan 128x128 px.
+- `src/`: Komponen React dan antarmuka dashboard.
+- `dist/`: Folder siap pasang ke browser setelah menjalankan `npm run build` atau mengekstrak rilis GitHub.
 
 ---
 
 ## ✨ Fitur Utama
 
-- 🕒 **Jam Digital & Tanggal:** Tampilan waktu presisi tinggi dengan format tanggal lengkap.
-- 🕌 **Jadwal Sholat Otomatis:** Menghitung waktu sholat (Subuh, Terbit, Dzuhur, Ashar, Maghrib, Isya) secara lokal dengan penanda waktu sholat berikutnya.
-- 🌤️ **Widget Cuaca Real-time:** Informasi suhu, kondisi cuaca, dan kecepatan angin.
-- ✅ **To-Do List Terintegrasi:** Manajemen tugas harian dengan checklist dan status selesai.
-- 📝 **Catatan Cepat (Sticky Notes):** Mencatat memo penting langsung di layar beranda.
+- 🕒 **Jam Digital & Tanggal:** Jam presisi tinggi lengkap dengan kalender masehi dan status detik.
+- 🕌 **Jadwal Sholat Otomatis:** Perhitungan waktu sholat berdasarkan koordinat lokasi dengan penanda waktu sholat berikutnya.
+- 🌤️ **Widget Cuaca Real-time:** Menampilkan temperatur, status cuaca, kelembapan, dan angin.
+- ✅ **To-Do List Terintegrasi:** Daftar tugas harian dengan checklist dan penyimpanan lokal otomatis.
+- 📝 **Catatan Cepat (Sticky Notes):** Mencatat memo penting langsung di layar tanpa aplikasi tambahan.
 - 🔗 **Pintasan Aplikasi & Web:** Akses cepat ke situs favorit yang dapat ditambah, diedit, dan dihapus.
-- 🪟 **Jendela Widget Bebas Geser (Draggable & Resizable):** Atur posisi dan ukuran jendela sesuai tata letak favorit Anda.
-- 🎨 **Kustomisasi Wallpaper:** Pilihan wallpaper bawaan atau unggah gambar latar belakang sendiri.
-
----
-
-## 🛠️ Perintah Pengembangan (Scripts)
-
-| Perintah | Deskripsi |
-| :--- | :--- |
-| `npm run dev` | Menjalankan server development lokal dengan live preview |
-| `npm run build` | Melakukan kompilasi aplikasi untuk siap rilis ke folder `dist/` |
-| `npm run lint` | Memeriksa tipe dan sintaksis TypeScript (`tsc --noEmit`) |
-| `npm run preview` | Meninjau hasil kompilasi `dist/` secara lokal |
+- 🪟 **Jendela Widget Bebas Geser & Atur Ukuran:** Posisi dan ukuran jendela tersimpan otomatis di penyimpanan lokal browser.
+- 🎨 **Kustomisasi Wallpaper:** Pilihan wallpaper estetik bawaan atau gunakan gambar latar belakang Anda sendiri.
 
 ---
 
