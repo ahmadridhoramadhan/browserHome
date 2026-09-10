@@ -31,33 +31,81 @@
   function executeUserScript(code) {
     if (!code || !code.trim()) return;
 
+    // 1. First attempt: Direct execution via Function constructor (allowed in Extension Sandbox)
     try {
-      // 1. First attempt: Direct execution via Function constructor (allowed in Extension Sandbox)
       var fn = new Function(code);
       fn();
       window.dispatchEvent(new Event('DOMContentLoaded'));
+      return;
     } catch (err) {
-      // 2. Check if the failure is due to CSP EvalError ('unsafe-eval' blocked in web preview)
       var isCspEvalBlock = err && (
         err.name === 'EvalError' ||
         String(err.message || '').toLowerCase().includes('content security policy') ||
-        String(err.message || '').toLowerCase().includes('unsafe-eval')
+        String(err.message || '').toLowerCase().includes('unsafe-eval') ||
+        String(err.message || '').toLowerCase().includes('eval')
       );
 
-      if (isCspEvalBlock) {
-        // Fallback: execute via same-origin script runner endpoint
-        loadScriptViaSameOrigin(code);
-      } else {
-        console.warn("Widget runtime warning:", err);
+      // If it's a real JavaScript runtime or syntax error in user code, display it directly
+      if (!isCspEvalBlock) {
+        console.warn("Widget script error:", err);
         if (errorEl) {
           errorEl.style.display = 'block';
           errorEl.textContent = 'Runtime error: ' + (err.message || String(err));
         }
+        return;
       }
+    }
+
+    // 2. Second attempt: Inline <script> element injection (works when 'unsafe-inline' is allowed)
+    try {
+      var oldInline = document.getElementById('dynamic-widget-inline');
+      if (oldInline) oldInline.remove();
+
+      var inlineScript = document.createElement('script');
+      inlineScript.id = 'dynamic-widget-inline';
+      inlineScript.textContent = code;
+      document.body.appendChild(inlineScript);
+      window.dispatchEvent(new Event('DOMContentLoaded'));
+      return;
+    } catch (inlineErr) {
+      console.warn("Inline script method failed:", inlineErr);
+    }
+
+    // 3. Third attempt: Blob URL script execution
+    try {
+      var blob = new Blob([code], { type: 'text/javascript' });
+      var blobUrl = URL.createObjectURL(blob);
+      var blobScript = document.createElement('script');
+      blobScript.src = blobUrl;
+      blobScript.onload = blobScript.onerror = function() {
+        URL.revokeObjectURL(blobUrl);
+        blobScript.remove();
+        window.dispatchEvent(new Event('DOMContentLoaded'));
+      };
+      document.body.appendChild(blobScript);
+      return;
+    } catch (blobErr) {
+      console.warn("Blob script method failed:", blobErr);
+    }
+
+    // 4. Fourth attempt: Dev server script proxy (ONLY on HTTP/HTTPS web preview, NEVER in chrome-extension)
+    if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+      loadScriptViaSameOrigin(code);
+      return;
+    }
+
+    // If all execution attempts are blocked in extension context
+    if (errorEl) {
+      errorEl.style.display = 'block';
+      errorEl.textContent = 'Eksekusi JavaScript dibatasi oleh Chrome. Silakan buka tab chrome://extensions dan klik ikon Reload (🔄) pada ekstensi ini untuk memperbarui izin sandbox.';
     }
   }
 
   function loadScriptViaSameOrigin(code) {
+    if (window.location.protocol !== 'http:' && window.location.protocol !== 'https:') {
+      return;
+    }
+
     try {
       var oldScript = document.getElementById('dynamic-widget-script');
       if (oldScript) {
