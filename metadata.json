@@ -1,0 +1,6 @@
+{
+  "name": "Chrome Home Dashboard",
+  "description": "Beranda Chrome kustom interaktif dengan jendela widget bebas geser (jam digital, cuaca, jadwal sholat, to-do list), shortcut aplikasi, dan kustomisasi wallpaper.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
