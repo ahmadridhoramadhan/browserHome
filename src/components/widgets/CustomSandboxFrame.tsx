@@ -22,13 +22,14 @@ export const CustomSandboxFrame: React.FC<CustomSandboxFrameProps> = ({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isReady, setIsReady] = useState(false);
 
-  // Check if running inside Chrome extension
+  // Check if running inside Chrome extension environment
   const isExtension = React.useMemo(() => {
     try {
-      const globalChrome = (window as unknown as { chrome?: { runtime?: { getURL: (path: string) => string } } })?.chrome;
+      if (typeof window === 'undefined') return false;
+      const globalChrome = (window as unknown as { chrome?: { runtime?: { getURL: (path: string) => string; id?: string } } })?.chrome;
       return Boolean(
-        (globalChrome && typeof globalChrome.runtime?.getURL === 'function') ||
-        window.location.protocol === 'chrome-extension:'
+        window.location.protocol === 'chrome-extension:' ||
+        (globalChrome && Boolean(globalChrome.runtime?.id))
       );
     } catch {
       return false;

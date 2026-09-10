@@ -10,8 +10,8 @@
     "storage"
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self';",
-    "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval'; child-src 'self';"
+    "extension_pages": "script-src 'self' 'sha256-bN+VsqgX4lO5roqFFAvP9XOkS5scYudV5indOfWtNQE='; object-src 'self';",
+    "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'sha256-bN+VsqgX4lO5roqFFAvP9XOkS5scYudV5indOfWtNQE='; child-src 'self';"
   },
   "sandbox": {
     "pages": [

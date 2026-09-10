@@ -64,11 +64,12 @@
       var inlineScript = document.createElement('script');
       inlineScript.id = 'dynamic-widget-inline';
       inlineScript.textContent = code;
+      // If inline scripts violate CSP, browser throws an error or security policy event
       document.body.appendChild(inlineScript);
       window.dispatchEvent(new Event('DOMContentLoaded'));
       return;
     } catch (inlineErr) {
-      console.warn("Inline script method failed:", inlineErr);
+      // Inline execution blocked by CSP, safely continue to other execution strategies
     }
 
     // 3. Third attempt: Blob URL script execution
