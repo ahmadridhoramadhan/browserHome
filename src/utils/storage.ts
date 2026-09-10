@@ -6,6 +6,7 @@ export const STORAGE_KEYS = {
   BACKGROUND: 'chrome_home_background',
   SHORTCUTS: 'chrome_home_shortcuts',
   SHORTCUTS_FOLDED: 'chrome_home_shortcuts_folded',
+  TOPBAR_FOLDED: 'chrome_home_topbar_folded',
   CUSTOM_WIDGETS: 'chrome_home_custom_widgets',
   TODOS: 'chrome_home_todos',
   NOTES: 'chrome_home_notes',

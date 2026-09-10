@@ -3,6 +3,8 @@ import {
   Search,
   Plus,
   Palette,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import { ThemeMode } from '../types';
 
@@ -13,6 +15,8 @@ interface TopBarProps {
   onOpenWallpaperModal: () => void;
   onResetLayout?: () => void;
   activeWidgetCount: number;
+  isFolded?: boolean;
+  onToggleFold: (folded: boolean) => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -22,6 +26,8 @@ export const TopBar: React.FC<TopBarProps> = ({
   onOpenWallpaperModal,
   onResetLayout,
   activeWidgetCount,
+  isFolded = false,
+  onToggleFold,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchEngine, setSearchEngine] = useState<'google' | 'duckduckgo' | 'bing' | 'youtube'>(
@@ -41,6 +47,27 @@ export const TopBar: React.FC<TopBarProps> = ({
     window.location.href = url;
     setSearchQuery('');
   };
+
+  if (isFolded) {
+    return (
+      <div className="fixed top-3 right-3 sm:right-6 z-40 flex items-center">
+        <button
+          type="button"
+          onClick={() => onToggleFold(false)}
+          title="Tampilkan Bilah Atas (Buka Menu)"
+          className="group flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/75 dark:bg-neutral-900/80 backdrop-blur-md border border-white/30 dark:border-white/10 shadow-lg text-xs font-medium text-neutral-700 dark:text-neutral-200 hover:bg-white/95 dark:hover:bg-neutral-800/95 transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer"
+        >
+          <ChevronDown className="w-4 h-4 text-blue-500 group-hover:translate-y-0.5 transition-transform" />
+          <span>Menu</span>
+          {activeWidgetCount > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-semibold bg-black/5 dark:bg-white/10 text-neutral-600 dark:text-neutral-400">
+              {activeWidgetCount}
+            </span>
+          )}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <header className="fixed top-0 left-0 right-0 z-40 px-3 sm:px-6 py-2.5 flex items-center justify-between gap-3 backdrop-blur-md bg-white/40 dark:bg-neutral-900/40 border-b border-white/20 dark:border-white/10 transition-colors duration-200">
@@ -124,6 +151,17 @@ export const TopBar: React.FC<TopBarProps> = ({
           className="p-2 rounded-lg bg-white/60 dark:bg-neutral-800/60 hover:bg-white/90 dark:hover:bg-neutral-700/80 border border-black/5 dark:border-white/10 text-neutral-700 dark:text-neutral-200 transition-colors shadow-sm cursor-pointer"
         >
           <Palette className="w-4 h-4 text-purple-500" />
+        </button>
+
+        {/* Fold TopBar Button (Placed on far right) */}
+        <button
+          type="button"
+          onClick={() => onToggleFold(true)}
+          title="Sembunyikan Bilah Atas (Lipat)"
+          aria-label="Sembunyikan Bilah Atas"
+          className="p-2 rounded-lg bg-white/60 dark:bg-neutral-800/60 hover:bg-white/90 dark:hover:bg-neutral-700/80 border border-black/5 dark:border-white/10 text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white transition-colors shadow-sm cursor-pointer"
+        >
+          <ChevronUp className="w-4 h-4" />
         </button>
       </div>
     </header>

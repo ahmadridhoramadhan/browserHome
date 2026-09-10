@@ -64,10 +64,43 @@ function aistudioMediaPlugin(): Plugin {
 }
 // LINT.ThenChange(//depot/google3/java/com/google/alkali/boq/makersuite/applet_dev_service/templates/initializers/react_theme/vite.config.ts:aistudio_media_plugin)
 
+function widgetScriptRunnerPlugin(): Plugin {
+  return {
+    name: 'vite-plugin-widget-script-runner',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (req.url && req.url.startsWith('/api/widget-script.js')) {
+          res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          if (req.method === 'POST') {
+            let body = '';
+            req.on('data', (chunk) => {
+              body += chunk;
+            });
+            req.on('end', () => {
+              res.end(body);
+            });
+            return;
+          }
+          try {
+            const parsed = new URL(req.url, 'http://localhost:3000');
+            const code = parsed.searchParams.get('c') || '';
+            res.end(code);
+          } catch {
+            res.end('// Failed to parse script param');
+          }
+          return;
+        }
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig(() => {
   return {
     base: './',
-    plugins: [react(), tailwindcss(), aistudioMediaPlugin()],
+    plugins: [react(), tailwindcss(), aistudioMediaPlugin(), widgetScriptRunnerPlugin()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

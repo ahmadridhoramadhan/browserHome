@@ -43,6 +43,16 @@ export default function App() {
     return loadFromStorage<ThemeMode>(STORAGE_KEYS.THEME, 'dark');
   });
 
+  // TopBar fold state (persisted in localStorage)
+  const [isTopBarFolded, setIsTopBarFolded] = useState<boolean>(() => {
+    return loadFromStorage<boolean>(STORAGE_KEYS.TOPBAR_FOLDED, false);
+  });
+
+  const handleToggleTopBarFold = (folded: boolean) => {
+    setIsTopBarFolded(folded);
+    saveToStorage(STORAGE_KEYS.TOPBAR_FOLDED, folded);
+  };
+
   // Background configuration state
   const [background, setBackground] = useState<BackgroundConfig>(() => {
     return loadFromStorage<BackgroundConfig>(STORAGE_KEYS.BACKGROUND, DEFAULT_BACKGROUND);
@@ -442,10 +452,16 @@ export default function App() {
         onOpenWallpaperModal={() => setIsWallpaperModalOpen(true)}
         onResetLayout={handleResetLayout}
         activeWidgetCount={activeWidgets.length}
+        isFolded={isTopBarFolded}
+        onToggleFold={handleToggleTopBarFold}
       />
 
       {/* Main Desktop Canvas for Draggable Windows */}
-      <main className="relative w-full h-full pt-14 pb-28 overflow-hidden">
+      <main
+        className={`relative w-full h-full ${
+          isTopBarFolded ? 'pt-4 sm:pt-6' : 'pt-14'
+        } pb-28 overflow-hidden transition-all duration-200`}
+      >
         {/* Render all open windows */}
         {activeWidgets.map((widget) => {
           const customDef =
