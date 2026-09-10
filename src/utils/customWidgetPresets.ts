@@ -37,14 +37,15 @@ export const STARTER_PRESETS: CustomPreset[] = [
   align-items: center;
   justify-content: center;
   padding: 6px;
+  background: transparent;
 }
 .clock {
   width: 170px;
   height: 170px;
   border-radius: 50%;
-  background: radial-gradient(circle, #1e293b 0%, #0f172a 100%);
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.25), inset 0 0 15px rgba(0,0,0,0.8);
-  border: 2px solid rgba(59, 130, 246, 0.4);
+  background: transparent;
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.35);
+  border: 2px solid rgba(96, 165, 250, 0.7);
   position: relative;
   margin-bottom: 12px;
 }
@@ -55,9 +56,10 @@ export const STARTER_PRESETS: CustomPreset[] = [
 }
 .marker {
   position: absolute;
-  color: #94a3b8;
+  color: #f1f5f9;
   font-size: 11px;
   font-weight: 700;
+  text-shadow: 0 0 6px rgba(96, 165, 250, 0.8);
 }
 .m12 { top: 8px; left: 50%; transform: translateX(-50%); }
 .m3  { right: 8px; top: 50%; transform: translateY(-50%); }
@@ -74,14 +76,16 @@ export const STARTER_PRESETS: CustomPreset[] = [
 .hour {
   width: 4px;
   height: 44px;
-  background: #f8fafc;
+  background: #ffffff;
   margin-left: -2px;
+  box-shadow: 0 0 6px #ffffff;
 }
 .minute {
   width: 3px;
   height: 60px;
   background: #60a5fa;
   margin-left: -1.5px;
+  box-shadow: 0 0 8px #60a5fa;
 }
 .second {
   width: 1.5px;
@@ -108,7 +112,7 @@ export const STARTER_PRESETS: CustomPreset[] = [
   font-weight: bold;
   color: #60a5fa;
   letter-spacing: 1px;
-  text-shadow: 0 0 10px rgba(96, 165, 250, 0.5);
+  text-shadow: 0 0 10px rgba(96, 165, 250, 0.6);
 }`,
     js: `function updateClock() {
   const now = new Date();

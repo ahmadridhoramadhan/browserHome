@@ -32,6 +32,7 @@ export interface WidgetState {
   zIndex: number;
   size?: Size;
   customId?: string;
+  isTransparent?: boolean;
 }
 
 export interface ShortcutItem {

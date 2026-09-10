@@ -68,7 +68,18 @@ export default function App() {
 
   // Custom widgets definitions state
   const [customWidgets, setCustomWidgets] = useState<CustomWidgetDef[]>(() => {
-    return loadFromStorage<CustomWidgetDef[]>(STORAGE_KEYS.CUSTOM_WIDGETS, []);
+    const raw = loadFromStorage<CustomWidgetDef[]>(STORAGE_KEYS.CUSTOM_WIDGETS, []);
+    // Auto-migrate any previously saved clock presets that have backdrop-filter or dark background:
+    return raw.map((w) => {
+      if (w.css && (w.css.includes('backdrop-filter') || w.css.includes('radial-gradient'))) {
+        const cleanedCss = w.css
+          .replace(/background:\s*radial-gradient\([^;]+;\s*/g, 'background: transparent;\n')
+          .replace(/backdrop-filter:\s*blur\([^;]+;\s*/g, '')
+          .replace(/-webkit-backdrop-filter:\s*blur\([^;]+;\s*/g, '');
+        return { ...w, css: cleanedCss };
+      }
+      return w;
+    });
   });
 
   // Widgets state
@@ -81,25 +92,35 @@ export default function App() {
     return loaded.map((w, idx) => ({
       ...w,
       zIndex: 10 + idx,
+      isTransparent: w.isTransparent !== undefined ? w.isTransparent : (w.type === 'custom'),
     }));
   });
 
-  // Helper to bring a specific widget to front while keeping all widget z-indices strictly within 10..35
+  // Helper to bring a specific widget to front while preserving array order so iframes are never reloaded by DOM re-parenting
   const bringWidgetToFront = useCallback((list: WidgetState[], focusedId: string): WidgetState[] => {
     const target = list.find((w) => w.id === focusedId);
     if (!target) return list;
 
-    const others = list.filter((w) => w.id !== focusedId).sort((a, b) => a.zIndex - b.zIndex);
+    const maxZ = Math.max(...list.map((w) => w.zIndex || 10), 10);
+    // If it is already the top-most window, keep the list unchanged
+    if ((target.zIndex || 10) === maxZ && list.filter((w) => (w.zIndex || 10) === maxZ).length === 1) {
+      return list;
+    }
+
+    const sorted = [...list].sort((a, b) => (a.zIndex || 10) - (b.zIndex || 10));
+    const withoutTarget = sorted.filter((w) => w.id !== focusedId);
+
+    const zMap = new Map<string, number>();
     let curZ = 10;
-    const reindexedOthers = others.map((w) => ({
+    withoutTarget.forEach((w) => {
+      zMap.set(w.id, curZ++);
+    });
+    zMap.set(focusedId, curZ);
+
+    return list.map((w) => ({
       ...w,
-      zIndex: curZ++,
+      zIndex: zMap.get(w.id) ?? w.zIndex,
     }));
-    const focused = {
-      ...target,
-      zIndex: curZ,
-    };
-    return [...reindexedOthers, focused];
   }, []);
 
   // Modals state
@@ -244,6 +265,7 @@ export default function App() {
           zIndex: 10 + prev.length,
           size: { width: def.width, height: def.height },
           customId: def.id,
+          isTransparent: true,
         };
         updated = bringWidgetToFront([...prev, newW], def.id);
       }
@@ -312,6 +334,21 @@ export default function App() {
     });
   };
 
+  // Toggle Transparent / Wallpaper Blending mode
+  const handleToggleTransparent = (id: string) => {
+    setWidgets((prev) => {
+      const updated = prev.map((w) => {
+        if (w.id === id) {
+          const currentVal = w.isTransparent !== undefined ? w.isTransparent : (w.type === 'custom');
+          return { ...w, isTransparent: !currentVal };
+        }
+        return w;
+      });
+      triggerWidgetsSave(updated);
+      return updated;
+    });
+  };
+
   // Toggle widget visibility from catalog
   const handleToggleWidget = (id: string) => {
     setWidgets((prev) => {
@@ -345,6 +382,7 @@ export default function App() {
             zIndex: 10 + prev.length,
             size: { width: customDef.width, height: customDef.height },
             customId: customDef.id,
+            isTransparent: true,
           };
           updated = bringWidgetToFront([...prev, newW], customDef.id);
         } else {
@@ -531,9 +569,11 @@ export default function App() {
               position={widget.position}
               zIndex={widget.zIndex}
               isMinimized={widget.isMinimized}
+              isTransparent={widget.isTransparent !== undefined ? widget.isTransparent : (widget.type === 'custom')}
               onPositionChange={handlePositionChange}
               onFocus={handleFocusWidget}
               onMinimizeToggle={handleMinimizeToggle}
+              onToggleTransparent={handleToggleTransparent}
               onClose={handleCloseWidget}
               defaultWidth={widget.size?.width || 360}
               minY={isTopBarFolded ? 8 : 12}

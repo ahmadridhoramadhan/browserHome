@@ -5,6 +5,14 @@
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     touch-action: manipulation;
   }
+  iframe {
+    border: none !important;
+    border-width: 0 !important;
+    border-style: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
 }
 
 /* Custom sleek scrollbars */

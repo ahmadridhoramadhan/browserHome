@@ -125,14 +125,25 @@
     var newJs = payload.js || '';
     var newTheme = payload.theme || 'dark';
 
-    // If payload is identical and not forced, do not wipe DOM or restart script to prevent blinking
-    if (
-      !payload.force &&
-      lastPayloadState.html === newHtml &&
-      lastPayloadState.css === newCss &&
-      lastPayloadState.js === newJs &&
-      lastPayloadState.theme === newTheme
-    ) {
+    var isInitial = (lastPayloadState.html === null);
+    var codeChanged = (
+      newHtml !== lastPayloadState.html ||
+      newCss !== lastPayloadState.css ||
+      newJs !== lastPayloadState.js
+    );
+    var themeChanged = (newTheme !== lastPayloadState.theme);
+
+    // If already rendered, code hasn't changed, and this isn't an explicit forceRefresh:
+    // DO NOT wipe the DOM or restart scripts! This completely prevents flickering!
+    if (!isInitial && !codeChanged && !payload.forceRefresh) {
+      if (themeChanged) {
+        lastPayloadState.theme = newTheme;
+        if (newTheme === 'light') {
+          document.body.style.color = '#171717';
+        } else {
+          document.body.style.color = '#e5e5e5';
+        }
+      }
       return;
     }
 

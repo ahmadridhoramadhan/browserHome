@@ -62,7 +62,7 @@ const CustomSandboxFrameComponent: React.FC<CustomSandboxFrameProps> = ({
     theme: '',
   });
 
-  const sendPayload = useCallback((force = false) => {
+  const sendPayload = useCallback((force = false, forceRefresh = false) => {
     if (!iframeRef.current?.contentWindow) return;
     const isDark = document.documentElement.classList.contains('dark');
     const theme = isDark ? 'dark' : 'light';
@@ -70,6 +70,7 @@ const CustomSandboxFrameComponent: React.FC<CustomSandboxFrameProps> = ({
     const prev = lastSentRef.current;
     if (
       !force &&
+      !forceRefresh &&
       prev.html === html &&
       prev.css === css &&
       prev.js === js &&
@@ -95,6 +96,7 @@ const CustomSandboxFrameComponent: React.FC<CustomSandboxFrameProps> = ({
         js: js || '',
         theme,
         force,
+        forceRefresh,
       },
       '*',
     );
@@ -106,7 +108,7 @@ const CustomSandboxFrameComponent: React.FC<CustomSandboxFrameProps> = ({
       if (e.data && e.data.type === 'WIDGET_SANDBOX_READY') {
         if (!iframeRef.current || e.source === iframeRef.current.contentWindow) {
           setIsReady(true);
-          sendPayload();
+          sendPayload(false, false);
         }
       }
     };
@@ -117,21 +119,21 @@ const CustomSandboxFrameComponent: React.FC<CustomSandboxFrameProps> = ({
   // Dispatch payload whenever code updates or ready state changes
   useEffect(() => {
     if (isReady) {
-      sendPayload();
+      sendPayload(false, Boolean(onRefreshTrigger));
     }
   }, [isReady, sendPayload, onRefreshTrigger]);
 
   // Backup timer in case onLoad or ready event was instantaneous
   useEffect(() => {
     const timer = setTimeout(() => {
-      sendPayload();
+      sendPayload(false, false);
     }, 150);
     return () => clearTimeout(timer);
-  }, [sendPayload, onRefreshTrigger]);
+  }, [sendPayload]);
 
   const handleIframeLoad = () => {
     setIsReady(true);
-    sendPayload();
+    sendPayload(false, false);
   };
 
   return (
@@ -143,6 +145,9 @@ const CustomSandboxFrameComponent: React.FC<CustomSandboxFrameProps> = ({
       sandbox={isExtension ? undefined : "allow-scripts allow-forms allow-popups"}
       className={className || 'w-full h-full border-0 block bg-transparent'}
       style={{
+        border: 'none',
+        outline: 'none',
+        boxShadow: 'none',
         background: 'transparent',
         ...style,
       }}
