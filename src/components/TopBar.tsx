@@ -5,6 +5,7 @@ import {
   Palette,
   ChevronUp,
   ChevronDown,
+  Cloud,
 } from 'lucide-react';
 import { ThemeMode } from '../types';
 
@@ -13,6 +14,7 @@ interface TopBarProps {
   onToggleTheme?: () => void;
   onOpenWidgetCatalog: () => void;
   onOpenWallpaperModal: () => void;
+  onOpenSyncModal?: () => void;
   onResetLayout?: () => void;
   activeWidgetCount: number;
   isFolded?: boolean;
@@ -24,6 +26,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onToggleTheme,
   onOpenWidgetCatalog,
   onOpenWallpaperModal,
+  onOpenSyncModal,
   onResetLayout,
   activeWidgetCount,
   isFolded = false,
@@ -152,6 +155,18 @@ export const TopBar: React.FC<TopBarProps> = ({
         >
           <Palette className="w-4 h-4 text-purple-500" />
         </button>
+
+        {/* Sync & Backup Settings */}
+        {onOpenSyncModal && (
+          <button
+            type="button"
+            onClick={onOpenSyncModal}
+            title="Sinkronisasi Perangkat & Cadangan"
+            className="p-2 rounded-lg bg-white/60 dark:bg-neutral-800/60 hover:bg-white/90 dark:hover:bg-neutral-700/80 border border-black/5 dark:border-white/10 text-neutral-700 dark:text-neutral-200 transition-colors shadow-sm cursor-pointer"
+          >
+            <Cloud className="w-4 h-4 text-emerald-500" />
+          </button>
+        )}
 
         {/* Fold TopBar Button (Placed on far right) */}
         <button

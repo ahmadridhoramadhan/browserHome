@@ -41,10 +41,24 @@ export const BackgroundSettingsModal: React.FC<BackgroundSettingsModalProps> = (
   const handleApplyUrl = (e: React.FormEvent) => {
     e.preventDefault();
     if (!customUrl.trim()) return;
+
+    let finalUrl = customUrl.trim();
+
+    // Auto-convert Google Drive sharing links to high-res direct image thumbnail link
+    const driveFileMatch = finalUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (driveFileMatch && driveFileMatch[1]) {
+      finalUrl = `https://drive.google.com/thumbnail?id=${driveFileMatch[1]}&sz=w2560`;
+    } else if (finalUrl.includes('drive.google.com')) {
+      const driveIdMatch = finalUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+      if (driveIdMatch && driveIdMatch[1]) {
+        finalUrl = `https://drive.google.com/thumbnail?id=${driveIdMatch[1]}&sz=w2560`;
+      }
+    }
+
     onChange({
       ...config,
       type: 'custom-url',
-      value: customUrl.trim(),
+      value: finalUrl,
     });
     setCustomUrl('');
   };
@@ -229,7 +243,7 @@ export const BackgroundSettingsModal: React.FC<BackgroundSettingsModalProps> = (
               {/* Image URL Form */}
               <form onSubmit={handleApplyUrl} className="flex flex-col gap-1.5">
                 <label className="font-medium text-neutral-700 dark:text-neutral-300">
-                  Gunakan URL Gambar Web:
+                  Gunakan URL Gambar Web / Google Drive:
                 </label>
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
@@ -237,7 +251,7 @@ export const BackgroundSettingsModal: React.FC<BackgroundSettingsModalProps> = (
                       type="url"
                       value={customUrl}
                       onChange={(e) => setCustomUrl(e.target.value)}
-                      placeholder="https://example.com/wallpaper.jpg"
+                      placeholder="https://... atau link Google Drive"
                       className="w-full pl-7 pr-3 py-1.5 rounded-lg bg-black/5 dark:bg-white/5 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500"
                     />
                     <Link className="w-3.5 h-3.5 text-neutral-400 absolute left-2 top-2" />
@@ -245,11 +259,14 @@ export const BackgroundSettingsModal: React.FC<BackgroundSettingsModalProps> = (
                   <button
                     type="submit"
                     disabled={!customUrl.trim()}
-                    className="px-3 py-1.5 rounded-lg bg-purple-600 text-white font-medium hover:bg-purple-700 transition-colors disabled:opacity-50"
+                    className="px-3 py-1.5 rounded-lg bg-purple-600 text-white font-medium hover:bg-purple-700 transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     Terapkan
                   </button>
                 </div>
+                <span className="text-[10px] text-neutral-500 dark:text-neutral-400">
+                  Mendukung link langsung (JPG/PNG/WebP) dan link Google Drive (pastikan diset &apos;Anyone with link&apos;). Otomatis tersinkron antar perangkat.
+                </span>
               </form>
 
               {/* Local File Upload */}
@@ -263,7 +280,7 @@ export const BackgroundSettingsModal: React.FC<BackgroundSettingsModalProps> = (
                     Klik untuk memilih gambar
                   </span>
                   <span className="text-[10px] text-neutral-400">
-                    JPG, PNG, atau WebP (Disimpan di browser)
+                    JPG, PNG, atau WebP (Tersimpan di perangkat lokal)
                   </span>
                   <input
                     type="file"

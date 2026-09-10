@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { ShortcutItem } from '../types';
 import { AddShortcutModal } from './AddShortcutModal';
-import { loadFromStorage, saveToStorage, STORAGE_KEYS } from '../utils/storage';
+import { loadFromStorage, saveToStorage, subscribeToStorage, STORAGE_KEYS } from '../utils/storage';
 
 interface AppShortcutsProps {
   shortcuts: ShortcutItem[];
@@ -36,10 +36,19 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
   // Edit mode toggle state
   const [isEditing, setIsEditing] = useState(false);
 
-  // Foldable state (persisted in localStorage)
+  // Foldable state (persisted in localStorage & synced)
   const [isFolded, setIsFolded] = useState<boolean>(() => {
     return loadFromStorage<boolean>(STORAGE_KEYS.SHORTCUTS_FOLDED, false);
   });
+
+  useEffect(() => {
+    const unsub = subscribeToStorage(STORAGE_KEYS.SHORTCUTS_FOLDED, (newVal) => {
+      if (typeof newVal === 'boolean') {
+        setIsFolded(newVal);
+      }
+    });
+    return unsub;
+  }, []);
 
   // Drag & drop state for reordering
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);

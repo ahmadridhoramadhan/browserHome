@@ -22,6 +22,8 @@ import {
   getDefaultWidgets,
   loadFromStorage,
   saveToStorage,
+  initStorageSync,
+  subscribeToStorage,
 } from './utils/storage';
 import { TopBar } from './components/TopBar';
 import { WindowFrame } from './components/WindowFrame';
@@ -35,6 +37,7 @@ import { AppShortcuts } from './components/AppShortcuts';
 import { BackgroundSettingsModal } from './components/BackgroundSettingsModal';
 import { WidgetCatalogModal } from './components/WidgetCatalogModal';
 import { CustomWidgetEditorModal } from './components/CustomWidgetEditorModal';
+import { SyncBackupModal } from './components/SyncBackupModal';
 import { getCustomWidgetIcon } from './utils/iconMap';
 
 export default function App() {
@@ -103,7 +106,56 @@ export default function App() {
   const [isWidgetCatalogOpen, setIsWidgetCatalogOpen] = useState(false);
   const [isWallpaperModalOpen, setIsWallpaperModalOpen] = useState(false);
   const [isCustomEditorOpen, setIsCustomEditorOpen] = useState(false);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [editingCustomWidget, setEditingCustomWidget] = useState<CustomWidgetDef | null>(null);
+
+  // Initialize Chrome Storage Sync & subscribe to real-time changes across devices and tabs
+  useEffect(() => {
+    const cleanupSync = initStorageSync();
+
+    const unsubBg = subscribeToStorage(STORAGE_KEYS.BACKGROUND, (newVal) => {
+      if (newVal) setBackground(newVal as BackgroundConfig);
+    });
+    const unsubWidgets = subscribeToStorage(STORAGE_KEYS.WIDGETS, (newVal) => {
+      if (Array.isArray(newVal)) setWidgets(newVal as WidgetState[]);
+    });
+    const unsubShortcuts = subscribeToStorage(STORAGE_KEYS.SHORTCUTS, (newVal) => {
+      if (Array.isArray(newVal)) setShortcuts(newVal as ShortcutItem[]);
+    });
+    const unsubTheme = subscribeToStorage(STORAGE_KEYS.THEME, (newVal) => {
+      if (newVal === 'dark' || newVal === 'light') setTheme(newVal);
+    });
+    const unsubCustom = subscribeToStorage(STORAGE_KEYS.CUSTOM_WIDGETS, (newVal) => {
+      if (Array.isArray(newVal)) setCustomWidgets(newVal as CustomWidgetDef[]);
+    });
+    const unsubFold = subscribeToStorage(STORAGE_KEYS.TOPBAR_FOLDED, (newVal) => {
+      if (typeof newVal === 'boolean') setIsTopBarFolded(newVal);
+    });
+
+    return () => {
+      cleanupSync();
+      unsubBg();
+      unsubWidgets();
+      unsubShortcuts();
+      unsubTheme();
+      unsubCustom();
+      unsubFold();
+    };
+  }, []);
+
+  const handleReloadAllSettings = useCallback(() => {
+    setTheme(loadFromStorage<ThemeMode>(STORAGE_KEYS.THEME, 'dark'));
+    setBackground(loadFromStorage<BackgroundConfig>(STORAGE_KEYS.BACKGROUND, DEFAULT_BACKGROUND));
+    setShortcuts(loadFromStorage<ShortcutItem[]>(STORAGE_KEYS.SHORTCUTS, DEFAULT_SHORTCUTS));
+    setCustomWidgets(loadFromStorage<CustomWidgetDef[]>(STORAGE_KEYS.CUSTOM_WIDGETS, []));
+    setWidgets(
+      loadFromStorage<WidgetState[]>(
+        STORAGE_KEYS.WIDGETS,
+        getDefaultWidgets(typeof window !== 'undefined' ? window.innerWidth : 1280),
+      ),
+    );
+    setIsTopBarFolded(loadFromStorage<boolean>(STORAGE_KEYS.TOPBAR_FOLDED, false));
+  }, []);
 
   // Sync theme with html document element
   useEffect(() => {
@@ -450,6 +502,7 @@ export default function App() {
         onToggleTheme={handleToggleTheme}
         onOpenWidgetCatalog={() => setIsWidgetCatalogOpen(true)}
         onOpenWallpaperModal={() => setIsWallpaperModalOpen(true)}
+        onOpenSyncModal={() => setIsSyncModalOpen(true)}
         onResetLayout={handleResetLayout}
         activeWidgetCount={activeWidgets.length}
         isFolded={isTopBarFolded}
@@ -483,6 +536,7 @@ export default function App() {
               onMinimizeToggle={handleMinimizeToggle}
               onClose={handleCloseWidget}
               defaultWidth={widget.size?.width || 360}
+              minY={isTopBarFolded ? 8 : 12}
               headerRightContent={
                 widget.type === 'custom' && customDef ? (
                   <button
@@ -543,6 +597,12 @@ export default function App() {
         onClose={() => setIsWallpaperModalOpen(false)}
         config={background}
         onChange={handleBackgroundChange}
+      />
+
+      <SyncBackupModal
+        isOpen={isSyncModalOpen}
+        onClose={() => setIsSyncModalOpen(false)}
+        onSettingsRestored={handleReloadAllSettings}
       />
     </div>
   );

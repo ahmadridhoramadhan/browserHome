@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Check, Trash2, Filter, CheckCircle2, Circle } from 'lucide-react';
 import { TodoItem } from '../../types';
-import { STORAGE_KEYS, loadFromStorage, saveToStorage } from '../../utils/storage';
+import { STORAGE_KEYS, loadFromStorage, saveToStorage, subscribeToStorage } from '../../utils/storage';
 
 const INITIAL_TODOS: TodoItem[] = [
   { id: '1', text: 'Buka materi kuliah / tugas kantor', completed: true, priority: 'high', createdAt: Date.now() - 3600000 },
@@ -13,6 +13,15 @@ export const TodoWidget: React.FC = () => {
   const [todos, setTodos] = useState<TodoItem[]>(() => {
     return loadFromStorage<TodoItem[]>(STORAGE_KEYS.TODOS, INITIAL_TODOS);
   });
+
+  useEffect(() => {
+    const unsub = subscribeToStorage(STORAGE_KEYS.TODOS, (newVal) => {
+      if (Array.isArray(newVal)) {
+        setTodos(newVal as TodoItem[]);
+      }
+    });
+    return unsub;
+  }, []);
   const [inputText, setInputText] = useState('');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all');

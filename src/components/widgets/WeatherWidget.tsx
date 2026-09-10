@@ -17,12 +17,21 @@ import {
 } from 'lucide-react';
 import { WeatherData } from '../../types';
 import { CityOption, PRESET_CITIES, fetchWeather, searchCities } from '../../utils/weatherApi';
-import { STORAGE_KEYS, loadFromStorage, saveToStorage } from '../../utils/storage';
+import { STORAGE_KEYS, loadFromStorage, saveToStorage, subscribeToStorage } from '../../utils/storage';
 
 export const WeatherWidget: React.FC = () => {
   const [selectedCity, setSelectedCity] = useState<CityOption>(() => {
     return loadFromStorage<CityOption>(STORAGE_KEYS.WEATHER_CITY, PRESET_CITIES[0]);
   });
+
+  useEffect(() => {
+    const unsub = subscribeToStorage(STORAGE_KEYS.WEATHER_CITY, (newVal) => {
+      if (newVal && typeof newVal === 'object' && 'name' in newVal) {
+        setSelectedCity(newVal as CityOption);
+      }
+    });
+    return unsub;
+  }, []);
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [showSearch, setShowSearch] = useState<boolean>(false);

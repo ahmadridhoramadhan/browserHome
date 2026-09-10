@@ -186,6 +186,51 @@ export function getDefaultWidgets(windowWidth: number = 1280): WidgetState[] {
   ];
 }
 
+export function isChromeSyncAvailable(): boolean {
+  try {
+    return (
+      typeof chrome !== 'undefined' &&
+      Boolean(chrome?.storage?.sync) &&
+      typeof chrome.storage.sync.get === 'function'
+    );
+  } catch {
+    return false;
+  }
+}
+
+type StorageListener = (value: unknown) => void;
+const listeners = new Map<string, Set<StorageListener>>();
+
+/**
+ * Subscribe to changes for a specific storage key (both from local changes and remote sync)
+ */
+export function subscribeToStorage(key: string, listener: StorageListener): () => void {
+  if (!listeners.has(key)) {
+    listeners.set(key, new Set());
+  }
+  listeners.get(key)!.add(listener);
+
+  return () => {
+    listeners.get(key)?.delete(listener);
+    if (listeners.get(key)?.size === 0) {
+      listeners.delete(key);
+    }
+  };
+}
+
+function notifySubscribers(key: string, value: unknown) {
+  const keyListeners = listeners.get(key);
+  if (keyListeners) {
+    keyListeners.forEach((fn) => {
+      try {
+        fn(value);
+      } catch (err) {
+        console.error(`Error in storage listener for ${key}:`, err);
+      }
+    });
+  }
+}
+
 export function loadFromStorage<T>(key: string, defaultValue: T): T {
   try {
     const item = localStorage.getItem(key);
@@ -197,10 +242,185 @@ export function loadFromStorage<T>(key: string, defaultValue: T): T {
   }
 }
 
+/**
+ * Save value to both localStorage (instant fast cache) and chrome.storage.sync (cross-device sync)
+ */
 export function saveToStorage<T>(key: string, value: T): void {
+  // 1. Instant local persistence
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (e) {
     console.warn(`Error writing ${key} to localStorage:`, e);
+  }
+
+  // 2. Notify local component subscribers immediately
+  notifySubscribers(key, value);
+
+  // 3. Sync to Chrome Cloud Sync if running in Chrome Extension
+  if (isChromeSyncAvailable()) {
+    try {
+      // Background uploads (Base64 data URLs) can exceed Chrome sync's 8KB per-item quota limit
+      if (key === STORAGE_KEYS.BACKGROUND) {
+        const bg = value as unknown as BackgroundConfig;
+        if (bg && bg.type === 'upload' && bg.value && bg.value.length > 5000) {
+          // Store the large file in chrome.storage.local instead
+          if (chrome.storage?.local) {
+            chrome.storage.local.set({ [key]: bg });
+          }
+          // In sync, keep the configuration (blur, overlay) without overflowing 8KB quota
+          const syncMeta: BackgroundConfig = {
+            ...bg,
+            value: '', // Large upload stays local
+          };
+          chrome.storage.sync.set({ [key]: syncMeta }).catch((err) => {
+            console.warn('Chrome sync error for background metadata:', err);
+          });
+          return;
+        }
+      }
+
+      // Check serialized size against Chrome's 8KB per-item quota (8192 bytes limit)
+      const serialized = JSON.stringify(value);
+      if (serialized.length > 7800) {
+        // Fallback to chrome.storage.local for oversized single items
+        if (chrome.storage?.local) {
+          chrome.storage.local.set({ [key]: value });
+        }
+        console.warn(`Item ${key} exceeds 8KB sync quota (${serialized.length} bytes), saved locally.`);
+        return;
+      }
+
+      chrome.storage.sync.set({ [key]: value }, () => {
+        if (chrome.runtime.lastError) {
+          console.warn(`chrome.storage.sync error saving ${key}:`, chrome.runtime.lastError.message);
+        }
+      });
+    } catch (e) {
+      console.warn(`Failed to push ${key} to chrome.storage.sync:`, e);
+    }
+  }
+}
+
+/**
+ * Initialize Chrome Storage Sync on app startup.
+ * Loads remote synced values from Chrome and listens to real-time changes across devices.
+ */
+export function initStorageSync(onRemoteUpdate?: (key: string, value: unknown) => void): () => void {
+  if (!isChromeSyncAvailable()) {
+    return () => {};
+  }
+
+  // A. Initial load of all synced data from Chrome Cloud
+  chrome.storage.sync.get(null, (items) => {
+    if (chrome.runtime.lastError) {
+      console.warn('Error reading from chrome.storage.sync:', chrome.runtime.lastError.message);
+      return;
+    }
+
+    if (items && typeof items === 'object') {
+      Object.entries(items).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          // If this is background and value was truncated due to quota, keep local upload if present
+          if (key === STORAGE_KEYS.BACKGROUND) {
+            const currentLocal = loadFromStorage<BackgroundConfig | null>(STORAGE_KEYS.BACKGROUND, null);
+            const remoteBg = value as BackgroundConfig;
+            if (remoteBg.type === 'upload' && !remoteBg.value && currentLocal?.value) {
+              remoteBg.value = currentLocal.value;
+            }
+          }
+
+          try {
+            localStorage.setItem(key, JSON.stringify(value));
+          } catch {
+            // ignore
+          }
+          notifySubscribers(key, value);
+          if (onRemoteUpdate) {
+            onRemoteUpdate(key, value);
+          }
+        }
+      });
+    }
+  });
+
+  // B. Listen for real-time changes made on other devices or other tabs
+  const changeListener = (
+    changes: { [key: string]: chrome.storage.StorageChange },
+    areaName: string,
+  ) => {
+    if (areaName !== 'sync') return;
+
+    Object.entries(changes).forEach(([key, change]) => {
+      if (change.newValue !== undefined) {
+        try {
+          localStorage.setItem(key, JSON.stringify(change.newValue));
+        } catch {
+          // ignore
+        }
+        notifySubscribers(key, change.newValue);
+        if (onRemoteUpdate) {
+          onRemoteUpdate(key, change.newValue);
+        }
+      } else if (change.oldValue !== undefined && change.newValue === undefined) {
+        try {
+          localStorage.removeItem(key);
+        } catch {
+          // ignore
+        }
+      }
+    });
+  };
+
+  chrome.storage.onChanged.addListener(changeListener);
+
+  return () => {
+    try {
+      chrome.storage.onChanged.removeListener(changeListener);
+    } catch {
+      // ignore
+    }
+  };
+}
+
+/**
+ * Export all user configurations as a JSON string for offline backup or manual transfer
+ */
+export function exportAllSettings(): string {
+  const exportData: Record<string, unknown> = {};
+  Object.values(STORAGE_KEYS).forEach((key) => {
+    const val = localStorage.getItem(key);
+    if (val !== null) {
+      try {
+        exportData[key] = JSON.parse(val);
+      } catch {
+        exportData[key] = val;
+      }
+    }
+  });
+  return JSON.stringify({
+    version: '1.0',
+    timestamp: new Date().toISOString(),
+    data: exportData,
+  }, null, 2);
+}
+
+/**
+ * Import configurations from a JSON string
+ */
+export function importAllSettings(jsonString: string): boolean {
+  try {
+    const parsed = JSON.parse(jsonString);
+    const data = parsed.data || parsed;
+    if (typeof data !== 'object' || data === null) return false;
+
+    Object.entries(data).forEach(([key, val]) => {
+      if (Object.values(STORAGE_KEYS).includes(key)) {
+        saveToStorage(key, val);
+      }
+    });
+    return true;
+  } catch (err) {
+    console.error('Failed to import settings:', err);
+    return false;
   }
 }

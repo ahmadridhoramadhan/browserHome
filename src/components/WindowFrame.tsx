@@ -17,6 +17,7 @@ interface WindowFrameProps {
   className?: string;
   headerRightContent?: React.ReactNode;
   defaultWidth?: number;
+  minY?: number;
 }
 
 export const WindowFrame: React.FC<WindowFrameProps> = ({
@@ -34,6 +35,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({
   className = '',
   headerRightContent,
   defaultWidth = 360,
+  minY = 8,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef<{ startX: number; startY: number; posX: number; posY: number }>({
@@ -83,14 +85,14 @@ export const WindowFrame: React.FC<WindowFrameProps> = ({
     const maxY = Math.max(window.innerHeight - 80, 200);
 
     const newX = Math.min(Math.max(-defaultWidth + 80, dragStartRef.current.posX + dx), maxX);
-    const newY = Math.min(Math.max(60, dragStartRef.current.posY + dy), maxY);
+    const newY = Math.min(Math.max(minY, dragStartRef.current.posY + dy), maxY);
 
     currentPosRef.current = { x: newX, y: newY };
 
     if (windowRef.current) {
       windowRef.current.style.transform = `translate3d(${newX}px, ${newY}px, 0)`;
     }
-  }, [isDragging, defaultWidth]);
+  }, [isDragging, defaultWidth, minY]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (!isDragging) return;
