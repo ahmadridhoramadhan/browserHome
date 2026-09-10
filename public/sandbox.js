@@ -31,7 +31,7 @@
   function executeUserScript(code) {
     if (!code || !code.trim()) return;
 
-    // 1. First attempt: Direct execution via Function constructor (allowed in Extension Sandbox)
+    // 1. Primary execution: Direct execution via Function constructor (allowed in Extension Sandbox)
     try {
       var fn = new Function(code);
       fn();
@@ -45,7 +45,7 @@
         String(err.message || '').toLowerCase().includes('eval')
       );
 
-      // If it's a real JavaScript runtime or syntax error in user code, display it directly
+      // If it is a regular JavaScript syntax or runtime error in the user's code, display it cleanly
       if (!isCspEvalBlock) {
         console.warn("Widget script error:", err);
         if (errorEl) {
@@ -56,20 +56,10 @@
       }
     }
 
-    // 2. Second attempt: Inline <script> element injection (works when 'unsafe-inline' is allowed)
-    try {
-      var oldInline = document.getElementById('dynamic-widget-inline');
-      if (oldInline) oldInline.remove();
-
-      var inlineScript = document.createElement('script');
-      inlineScript.id = 'dynamic-widget-inline';
-      inlineScript.textContent = code;
-      // If inline scripts violate CSP, browser throws an error or security policy event
-      document.body.appendChild(inlineScript);
-      window.dispatchEvent(new Event('DOMContentLoaded'));
+    // 2. Secondary execution: Dev server script proxy (ONLY on HTTP/HTTPS web preview, NEVER in chrome-extension)
+    if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+      loadScriptViaSameOrigin(code);
       return;
-    } catch (inlineErr) {
-      // Inline execution blocked by CSP, safely continue to other execution strategies
     }
 
     // 3. Third attempt: Blob URL script execution
@@ -86,13 +76,7 @@
       document.body.appendChild(blobScript);
       return;
     } catch (blobErr) {
-      console.warn("Blob script method failed:", blobErr);
-    }
-
-    // 4. Fourth attempt: Dev server script proxy (ONLY on HTTP/HTTPS web preview, NEVER in chrome-extension)
-    if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
-      loadScriptViaSameOrigin(code);
-      return;
+      console.warn("Blob script execution failed:", blobErr);
     }
 
     // If all execution attempts are blocked in extension context
@@ -128,7 +112,37 @@
     }
   }
 
+  let lastPayloadState = {
+    html: null,
+    css: null,
+    js: null,
+    theme: null
+  };
+
   function render(payload) {
+    var newHtml = payload.html || '';
+    var newCss = payload.css || '';
+    var newJs = payload.js || '';
+    var newTheme = payload.theme || 'dark';
+
+    // If payload is identical and not forced, do not wipe DOM or restart script to prevent blinking
+    if (
+      !payload.force &&
+      lastPayloadState.html === newHtml &&
+      lastPayloadState.css === newCss &&
+      lastPayloadState.js === newJs &&
+      lastPayloadState.theme === newTheme
+    ) {
+      return;
+    }
+
+    lastPayloadState = {
+      html: newHtml,
+      css: newCss,
+      js: newJs,
+      theme: newTheme
+    };
+
     clearTimers();
     if (errorEl) {
       errorEl.style.display = 'none';
@@ -136,20 +150,20 @@
     }
 
     if (styleEl) {
-      styleEl.textContent = payload.css || '';
+      styleEl.textContent = newCss;
     }
 
     if (rootEl) {
-      rootEl.innerHTML = payload.html || '<div style="text-align:center;padding:20px;color:#888;">Widget kosong</div>';
+      rootEl.innerHTML = newHtml || '<div style="text-align:center;padding:20px;color:#888;">Widget kosong</div>';
     }
 
-    if (payload.theme === 'light') {
+    if (newTheme === 'light') {
       document.body.style.color = '#171717';
     } else {
       document.body.style.color = '#e5e5e5';
     }
 
-    executeUserScript(payload.js);
+    executeUserScript(newJs);
   }
 
   window.addEventListener('message', function(event) {

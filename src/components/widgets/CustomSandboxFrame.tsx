@@ -10,7 +10,7 @@ export interface CustomSandboxFrameProps {
   onRefreshTrigger?: number;
 }
 
-export const CustomSandboxFrame: React.FC<CustomSandboxFrameProps> = ({
+const CustomSandboxFrameComponent: React.FC<CustomSandboxFrameProps> = ({
   html,
   css,
   js,
@@ -49,20 +49,56 @@ export const CustomSandboxFrame: React.FC<CustomSandboxFrameProps> = ({
     return '/sandbox.html';
   }, []);
 
-  const sendPayload = useCallback(() => {
+  const lastSentRef = useRef<{
+    html: string;
+    css: string;
+    js: string;
+    theme: string;
+    trigger?: number;
+  }>({
+    html: '',
+    css: '',
+    js: '',
+    theme: '',
+  });
+
+  const sendPayload = useCallback((force = false) => {
     if (!iframeRef.current?.contentWindow) return;
     const isDark = document.documentElement.classList.contains('dark');
+    const theme = isDark ? 'dark' : 'light';
+
+    const prev = lastSentRef.current;
+    if (
+      !force &&
+      prev.html === html &&
+      prev.css === css &&
+      prev.js === js &&
+      prev.theme === theme &&
+      prev.trigger === onRefreshTrigger
+    ) {
+      return;
+    }
+
+    lastSentRef.current = {
+      html: html || '',
+      css: css || '',
+      js: js || '',
+      theme,
+      trigger: onRefreshTrigger,
+    };
+
     iframeRef.current.contentWindow.postMessage(
       {
         type: 'RENDER_WIDGET',
         html: html || '',
         css: css || '',
         js: js || '',
-        theme: isDark ? 'dark' : 'light',
+        theme,
+        force,
       },
       '*',
     );
-  }, [html, css, js]);
+  }, [html, css, js, onRefreshTrigger]);
 
   // Listen for sandbox readiness message
   useEffect(() => {
@@ -105,8 +141,13 @@ export const CustomSandboxFrame: React.FC<CustomSandboxFrameProps> = ({
       onLoad={handleIframeLoad}
       title={title || 'Custom Widget Sandbox'}
       sandbox={isExtension ? undefined : "allow-scripts allow-forms allow-popups"}
-      className={className || 'w-full h-full border-0 block'}
-      style={style}
+      className={className || 'w-full h-full border-0 block bg-transparent'}
+      style={{
+        background: 'transparent',
+        ...style,
+      }}
     />
   );
 };
+
+export const CustomSandboxFrame = React.memo(CustomSandboxFrameComponent);

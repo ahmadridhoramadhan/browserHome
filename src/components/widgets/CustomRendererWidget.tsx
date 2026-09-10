@@ -6,24 +6,26 @@ interface CustomRendererWidgetProps {
   customDef: CustomWidgetDef;
 }
 
-export const CustomRendererWidget: React.FC<CustomRendererWidgetProps> = ({ customDef }) => {
+export const CustomRendererWidget: React.FC<CustomRendererWidgetProps> = React.memo(({ customDef }) => {
   const { html, css, js, title } = customDef;
+  const contentHeight = Math.max(180, (customDef.height || 280) - 50);
 
   return (
     <div
-      className="w-full relative overflow-hidden rounded-lg bg-black/20 dark:bg-black/40 border border-black/5 dark:border-white/5"
-      style={{ minHeight: Math.max(140, (customDef.height || 260) - 60) }}
+      className="w-full relative flex items-center justify-center bg-transparent"
+      style={{ minHeight: contentHeight }}
     >
       <CustomSandboxFrame
         html={html}
         css={css}
         js={js}
         title={title || 'Custom Widget'}
-        className="w-full h-full min-h-[220px] border-0 block"
+        className="w-full h-full border-0 block bg-transparent"
         style={{
-          height: Math.max(160, (customDef.height || 260) - 60),
+          height: contentHeight,
+          background: 'transparent',
         }}
       />
     </div>
   );
-};
+});
