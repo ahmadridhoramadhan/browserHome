@@ -21,6 +21,7 @@ import {
   pullSettingsFromChromeSync,
   pushSettingsToChromeSync,
   getLastSyncTimes,
+  getChromeExtensionId,
 } from '../utils/storage';
 
 interface SyncBackupModalProps {
@@ -395,9 +396,16 @@ export const SyncBackupModal: React.FC<SyncBackupModalProps> = ({
               {/* Notice */}
               <div className="p-3 rounded-xl bg-neutral-100/70 dark:bg-neutral-800/40 border border-neutral-200/60 dark:border-neutral-700/40 text-xs text-neutral-500 dark:text-neutral-400 flex gap-2 items-start">
                 <Info className="w-4 h-4 text-neutral-400 shrink-0 mt-0.5" />
-                <p className="leading-relaxed">
-                  Data yang disinkronkan meliputi posisi widget, pintasan URL, catatan, todo list, jadwal sholat, kota cuaca, dan wallpaper preset/online.
-                </p>
+                <div className="space-y-1">
+                  <p className="leading-relaxed">
+                    Data yang disinkronkan meliputi posisi widget, pintasan URL, catatan, todo list, jadwal sholat, kota cuaca, dan wallpaper preset/online.
+                  </p>
+                  {getChromeExtensionId() && (
+                    <p className="text-[11px] font-mono text-neutral-500 dark:text-neutral-400">
+                      ID Ekstensi aktif: <span className="text-blue-600 dark:text-blue-400 font-semibold">{getChromeExtensionId()}</span>
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           )}

@@ -200,6 +200,14 @@ export function isChromeSyncAvailable(): boolean {
   }
 }
 
+export function getChromeExtensionId(): string | null {
+  try {
+    return typeof chrome !== 'undefined' && chrome?.runtime?.id ? chrome.runtime.id : null;
+  } catch {
+    return null;
+  }
+}
+
 type StorageListener = (value: unknown) => void;
 const listeners = new Map<string, Set<StorageListener>>();
 
