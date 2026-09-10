@@ -28,7 +28,7 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
   onReorderShortcuts,
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [failedFavicons, setFailedFavicons] = useState<Record<string, boolean>>({});
+  const [failedFaviconStages, setFailedFaviconStages] = useState<Record<string, number>>({});
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -55,20 +55,32 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
 
   const getDomain = (url: string) => {
     try {
-      const parsed = new URL(url.startsWith('http') ? url : `https://${url}`);
-      return parsed.hostname;
+      const cleanUrl = url.trim().replace(/^http:\/\//i, 'https://');
+      const parsed = new URL(cleanUrl.startsWith('http') ? cleanUrl : `https://${cleanUrl}`);
+      const hostname = parsed.hostname.toLowerCase();
+      // For WhatsApp and similar subdomains, the root domain is reliable with favicon services
+      if (hostname.endsWith('whatsapp.com')) {
+        return 'whatsapp.com';
+      }
+      return hostname;
     } catch {
       return url;
     }
   };
 
-  const getFaviconUrl = (url: string) => {
+  const getFaviconUrl = (url: string, stage: number = 0) => {
     const domain = getDomain(url);
+    if (stage === 1) {
+      return `https://icons.duckduckgo.com/ip3/${domain}.ico`;
+    }
     return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
   };
 
   const handleImageError = (id: string) => {
-    setFailedFavicons((prev) => ({ ...prev, [id]: true }));
+    setFailedFaviconStages((prev) => {
+      const currentStage = prev[id] || 0;
+      return { ...prev, [id]: currentStage + 1 };
+    });
   };
 
   const checkScroll = useCallback(() => {
@@ -261,7 +273,8 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
                 className="w-full flex flex-row items-center flex-nowrap overflow-x-auto gap-2.5 sm:gap-3 p-1.5 custom-shortcut-scrollbar scroll-smooth"
               >
                 {shortcuts.map((shortcut, index) => {
-                  const hasFailed = failedFavicons[shortcut.id];
+                  const stage = failedFaviconStages[shortcut.id] || 0;
+                  const hasFailed = stage >= 2;
                   const isBeingDragged = draggedIndex === index;
                   const isDropTarget = dragOverIndex === index && draggedIndex !== index;
 
@@ -334,7 +347,8 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
                         >
                           {!hasFailed ? (
                             <img
-                              src={getFaviconUrl(shortcut.url)}
+                              key={`${shortcut.id}-${stage}`}
+                              src={getFaviconUrl(shortcut.url, stage)}
                               alt={shortcut.title}
                               onError={() => handleImageError(shortcut.id)}
                               className="w-6 h-6 sm:w-7 sm:h-7 object-contain"

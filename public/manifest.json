@@ -9,6 +9,22 @@
   "permissions": [
     "storage"
   ],
+  "sandbox": {
+    "pages": [
+      "sandbox.html"
+    ]
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "sandbox.html",
+        "icons/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
   "action": {
     "default_title": "Home"
   },

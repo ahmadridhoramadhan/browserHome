@@ -16,6 +16,7 @@ import {
 import { CustomWidgetDef } from '../types';
 import { AVAILABLE_CUSTOM_ICONS, getCustomWidgetIcon } from '../utils/iconMap';
 import { STARTER_PRESETS } from '../utils/customWidgetPresets';
+import { CustomSandboxFrame } from './widgets/CustomSandboxFrame';
 
 interface CustomWidgetEditorModalProps {
   isOpen: boolean;
@@ -161,39 +162,7 @@ export const CustomWidgetEditorModal: React.FC<CustomWidgetEditorModalProps> = (
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // Compile isolated srcdoc for live preview
-  const previewDoc = useMemo(() => {
-    return `<!DOCTYPE html>
-<html lang="id">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      padding: 12px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      color: #f1f5f9;
-      background: transparent;
-      overflow-x: hidden;
-    }
-    ${cssCode || ''}
-  </style>
-</head>
-<body>
-  ${htmlCode || '<div style="text-align:center;padding:24px;color:#94a3b8;">Ketik kode HTML untuk melihat pratinjau</div>'}
-  <script>
-    try {
-      ${jsCode || ''}
-    } catch (err) {
-      console.error("Preview Error:", err);
-    }
-  <\/script>
-</body>
-</html>`;
-  }, [htmlCode, cssCode, jsCode]);
-
+  // Save widget handler
   const handleSaveWidget = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -479,10 +448,11 @@ export const CustomWidgetEditorModal: React.FC<CustomWidgetEditorModalProps> = (
 
                 {activeTab === 'preview' && (
                   <div className="w-full h-full min-h-[220px] bg-neutral-950 p-2 overflow-auto">
-                    <iframe
-                      key={previewKey}
-                      srcDoc={previewDoc}
-                      sandbox="allow-scripts"
+                    <CustomSandboxFrame
+                      html={htmlCode}
+                      css={cssCode}
+                      js={jsCode}
+                      onRefreshTrigger={previewKey}
                       title="Preview"
                       className="w-full h-full min-h-[200px] border border-neutral-800 rounded-lg bg-neutral-900"
                     />
