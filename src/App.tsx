@@ -130,6 +130,20 @@ export default function App() {
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [editingCustomWidget, setEditingCustomWidget] = useState<CustomWidgetDef | null>(null);
 
+  const handleReloadAllSettings = useCallback(() => {
+    setTheme(loadFromStorage<ThemeMode>(STORAGE_KEYS.THEME, 'dark'));
+    setBackground(loadFromStorage<BackgroundConfig>(STORAGE_KEYS.BACKGROUND, DEFAULT_BACKGROUND));
+    setShortcuts(loadFromStorage<ShortcutItem[]>(STORAGE_KEYS.SHORTCUTS, DEFAULT_SHORTCUTS));
+    setCustomWidgets(loadFromStorage<CustomWidgetDef[]>(STORAGE_KEYS.CUSTOM_WIDGETS, []));
+    setWidgets(
+      loadFromStorage<WidgetState[]>(
+        STORAGE_KEYS.WIDGETS,
+        getDefaultWidgets(typeof window !== 'undefined' ? window.innerWidth : 1280),
+      ),
+    );
+    setIsTopBarFolded(loadFromStorage<boolean>(STORAGE_KEYS.TOPBAR_FOLDED, false));
+  }, []);
+
   // Initialize Chrome Storage Sync & subscribe to real-time changes across devices and tabs
   useEffect(() => {
     const cleanupSync = initStorageSync();
@@ -162,28 +176,19 @@ export default function App() {
       unsubCustom();
       unsubFold();
     };
-  }, []);
-
-  const handleReloadAllSettings = useCallback(() => {
-    setTheme(loadFromStorage<ThemeMode>(STORAGE_KEYS.THEME, 'dark'));
-    setBackground(loadFromStorage<BackgroundConfig>(STORAGE_KEYS.BACKGROUND, DEFAULT_BACKGROUND));
-    setShortcuts(loadFromStorage<ShortcutItem[]>(STORAGE_KEYS.SHORTCUTS, DEFAULT_SHORTCUTS));
-    setCustomWidgets(loadFromStorage<CustomWidgetDef[]>(STORAGE_KEYS.CUSTOM_WIDGETS, []));
-    setWidgets(
-      loadFromStorage<WidgetState[]>(
-        STORAGE_KEYS.WIDGETS,
-        getDefaultWidgets(typeof window !== 'undefined' ? window.innerWidth : 1280),
-      ),
-    );
-    setIsTopBarFolded(loadFromStorage<boolean>(STORAGE_KEYS.TOPBAR_FOLDED, false));
-  }, []);
+  }, [handleReloadAllSettings]);
 
   // Sync theme with html document element
+  const isFirstThemeMount = useRef(true);
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
+    }
+    if (isFirstThemeMount.current) {
+      isFirstThemeMount.current = false;
+      return;
     }
     saveToStorage(STORAGE_KEYS.THEME, theme);
   }, [theme]);

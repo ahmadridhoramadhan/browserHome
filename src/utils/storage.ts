@@ -13,6 +13,8 @@ export const STORAGE_KEYS = {
   PRAYER_CITY: 'chrome_home_prayer_city',
   WEATHER_CITY: 'chrome_home_weather_city',
   SEARCH_ENGINE: 'chrome_home_search_engine',
+  LAST_SYNC_UPLOAD: 'chrome_home_last_sync_upload',
+  LAST_SYNC_DOWNLOAD: 'chrome_home_last_sync_download',
 };
 
 export const DEFAULT_SHORTCUTS: ShortcutItem[] = [
@@ -293,12 +295,182 @@ export function saveToStorage<T>(key: string, value: T): void {
       chrome.storage.sync.set({ [key]: value }, () => {
         if (chrome.runtime.lastError) {
           console.warn(`chrome.storage.sync error saving ${key}:`, chrome.runtime.lastError.message);
+        } else {
+          try {
+            localStorage.setItem(STORAGE_KEYS.LAST_SYNC_UPLOAD, JSON.stringify(new Date().toISOString()));
+          } catch {
+            // ignore
+          }
         }
       });
     } catch (e) {
       console.warn(`Failed to push ${key} to chrome.storage.sync:`, e);
     }
   }
+}
+
+export interface SyncResult {
+  success: boolean;
+  message: string;
+  itemCount: number;
+  timestamp: string;
+  keys?: string[];
+}
+
+/**
+ * Explicitly pulls/downloads the latest settings from Chrome Cloud Sync
+ * and updates localStorage & all component subscribers immediately.
+ */
+export function pullSettingsFromChromeSync(): Promise<SyncResult> {
+  return new Promise((resolve) => {
+    if (!isChromeSyncAvailable()) {
+      resolve({
+        success: false,
+        message: 'Chrome Cloud Sync hanya tersedia saat dipasang sebagai ekstensi Chrome.',
+        itemCount: 0,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    chrome.storage.sync.get(null, (items) => {
+      if (chrome.runtime.lastError) {
+        resolve({
+          success: false,
+          message: `Gagal membaca dari Chrome Sync: ${chrome.runtime.lastError.message}`,
+          itemCount: 0,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      if (!items || typeof items !== 'object' || Object.keys(items).length === 0) {
+        resolve({
+          success: false,
+          message: 'Belum ada data pengaturan yang tersimpan di Chrome Sync akun ini.',
+          itemCount: 0,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      const validKeys = Object.values(STORAGE_KEYS);
+      const appliedKeys: string[] = [];
+
+      Object.entries(items).forEach(([key, value]) => {
+        if (validKeys.includes(key) && value !== undefined && value !== null) {
+          if (key === STORAGE_KEYS.BACKGROUND) {
+            const currentLocal = loadFromStorage<BackgroundConfig | null>(STORAGE_KEYS.BACKGROUND, null);
+            const remoteBg = value as BackgroundConfig;
+            if (remoteBg.type === 'upload' && !remoteBg.value && currentLocal?.value) {
+              remoteBg.value = currentLocal.value;
+            }
+          }
+
+          try {
+            localStorage.setItem(key, JSON.stringify(value));
+            notifySubscribers(key, value);
+            appliedKeys.push(key);
+          } catch (e) {
+            console.warn(`Error applying synced key ${key}:`, e);
+          }
+        }
+      });
+
+      const now = new Date().toISOString();
+      try {
+        localStorage.setItem(STORAGE_KEYS.LAST_SYNC_DOWNLOAD, JSON.stringify(now));
+      } catch {
+        // ignore
+      }
+
+      resolve({
+        success: true,
+        message: `Berhasil mengunduh ${appliedKeys.length} pengaturan terbaru dari Chrome Sync!`,
+        itemCount: appliedKeys.length,
+        timestamp: now,
+        keys: appliedKeys,
+      });
+    });
+  });
+}
+
+/**
+ * Explicitly pushes/uploads all local configurations to Chrome Cloud Sync
+ */
+export function pushSettingsToChromeSync(): Promise<SyncResult> {
+  return new Promise((resolve) => {
+    if (!isChromeSyncAvailable()) {
+      resolve({
+        success: false,
+        message: 'Chrome Cloud Sync hanya tersedia saat dipasang sebagai ekstensi Chrome.',
+        itemCount: 0,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    const payload: Record<string, unknown> = {};
+    const excludedKeys = [STORAGE_KEYS.LAST_SYNC_UPLOAD, STORAGE_KEYS.LAST_SYNC_DOWNLOAD];
+    const validKeys = Object.values(STORAGE_KEYS).filter((k) => !excludedKeys.includes(k));
+
+    let count = 0;
+    validKeys.forEach((key) => {
+      const val = localStorage.getItem(key);
+      if (val !== null) {
+        try {
+          const parsed = JSON.parse(val);
+          if (key === STORAGE_KEYS.BACKGROUND && parsed && parsed.type === 'upload' && parsed.value?.length > 5000) {
+            payload[key] = { ...parsed, value: '' };
+            count++;
+          } else {
+            const serialized = JSON.stringify(parsed);
+            if (serialized.length <= 7800) {
+              payload[key] = parsed;
+              count++;
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+    });
+
+    chrome.storage.sync.set(payload, () => {
+      if (chrome.runtime.lastError) {
+        resolve({
+          success: false,
+          message: `Gagal mengunggah ke Chrome Sync: ${chrome.runtime.lastError.message}`,
+          itemCount: 0,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      const now = new Date().toISOString();
+      try {
+        localStorage.setItem(STORAGE_KEYS.LAST_SYNC_UPLOAD, JSON.stringify(now));
+      } catch {
+        // ignore
+      }
+
+      resolve({
+        success: true,
+        message: `Berhasil mengunggah ${count} pengaturan ke Chrome Sync akun Anda!`,
+        itemCount: count,
+        timestamp: now,
+      });
+    });
+  });
+}
+
+/**
+ * Get timestamps of last upload and last download
+ */
+export function getLastSyncTimes(): { upload: string | null; download: string | null } {
+  const upload = loadFromStorage<string | null>(STORAGE_KEYS.LAST_SYNC_UPLOAD, null);
+  const download = loadFromStorage<string | null>(STORAGE_KEYS.LAST_SYNC_DOWNLOAD, null);
+  return { upload, download };
 }
 
 /**
@@ -340,6 +512,11 @@ export function initStorageSync(onRemoteUpdate?: (key: string, value: unknown) =
           }
         }
       });
+      try {
+        localStorage.setItem(STORAGE_KEYS.LAST_SYNC_DOWNLOAD, JSON.stringify(new Date().toISOString()));
+      } catch {
+        // ignore
+      }
     }
   });
 

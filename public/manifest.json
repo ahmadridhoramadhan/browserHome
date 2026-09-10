@@ -2,12 +2,16 @@
   "manifest_version": 3,
   "name": "Custom Home Browser",
   "version": "1.0.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAq38r7LuNkAyChF6yXApFotl/MEyZBliL1+HxNmXQhWXOKsS8NKh8u4U/0Ks7s9NXoOGGQS9qp8+dDUOXBKQYEGp9eKELLfCTa/bSaEumP7Fz0kdh2STDcu6zuYQjK+efkTTVduPXnelUE1SSdSRns3vzDl8NT9NDKgiwA3nJJeh89y9//xCNdnhZKR6Lr2Rrd6CMr/1hZeZ5okBlJ6XMBNBHbDKma0ybLPm8HXjd0R0LsMwhjOPM8pa31bRbHk0aB/QPzbYZK3M2V7qTcikNEfUWXnbcQBRk2DojrZKRB2Q+kMZj58j5CE2NCdbjGH22YiYiO6mMFFFXtPClctuT8wIDAQAB",
   "description": "Beranda Chrome kustom interaktif dengan jendela widget bebas geser, jam, cuaca, jadwal sholat, to-do list, dan pintasan aplikasi.",
   "chrome_url_overrides": {
     "newtab": "index.html"
   },
   "permissions": [
     "storage"
+  ],
+  "host_permissions": [
+    "<all_urls>"
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self';",
