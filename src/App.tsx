@@ -60,14 +60,34 @@ export default function App() {
 
   // Widgets state
   const [widgets, setWidgets] = useState<WidgetState[]>(() => {
-    return loadFromStorage<WidgetState[]>(
+    const loaded = loadFromStorage<WidgetState[]>(
       STORAGE_KEYS.WIDGETS,
       getDefaultWidgets(typeof window !== 'undefined' ? window.innerWidth : 1280),
     );
+    // Sanitize and re-index so any previously inflated z-index from localStorage is safely reset to 10..N
+    return loaded.map((w, idx) => ({
+      ...w,
+      zIndex: 10 + idx,
+    }));
   });
 
-  // Highest z-index tracker for window focus
-  const highestZIndexRef = useRef<number>(25);
+  // Helper to bring a specific widget to front while keeping all widget z-indices strictly within 10..35
+  const bringWidgetToFront = useCallback((list: WidgetState[], focusedId: string): WidgetState[] => {
+    const target = list.find((w) => w.id === focusedId);
+    if (!target) return list;
+
+    const others = list.filter((w) => w.id !== focusedId).sort((a, b) => a.zIndex - b.zIndex);
+    let curZ = 10;
+    const reindexedOthers = others.map((w) => ({
+      ...w,
+      zIndex: curZ++,
+    }));
+    const focused = {
+      ...target,
+      zIndex: curZ,
+    };
+    return [...reindexedOthers, focused];
+  }, []);
 
   // Modals state
   const [isWidgetCatalogOpen, setIsWidgetCatalogOpen] = useState(false);
@@ -134,9 +154,6 @@ export default function App() {
     });
 
     // Also update or open the active window for this custom widget
-    highestZIndexRef.current += 1;
-    const nextZ = highestZIndexRef.current;
-
     setWidgets((prev) => {
       const existing = prev.find((w) => w.id === def.id || w.customId === def.id);
       let updated: WidgetState[];
@@ -147,10 +164,10 @@ export default function App() {
                 ...w,
                 title: def.title,
                 size: { width: def.width, height: def.height },
-                zIndex: nextZ,
               }
             : w,
         );
+        updated = bringWidgetToFront(updated, existing.id);
       } else {
         const newW: WidgetState = {
           id: def.id,
@@ -162,11 +179,11 @@ export default function App() {
             x: Math.max(40, window.innerWidth / 2 - def.width / 2),
             y: 130,
           },
-          zIndex: nextZ,
+          zIndex: 10 + prev.length,
           size: { width: def.width, height: def.height },
           customId: def.id,
         };
-        updated = [...prev, newW];
+        updated = bringWidgetToFront([...prev, newW], def.id);
       }
       triggerWidgetsSave(updated);
       return updated;
@@ -197,12 +214,10 @@ export default function App() {
     setIsCustomEditorOpen(true);
   };
 
-  // Window Focus: bring to front
+  // Window Focus: bring to front safely within 10..35
   const handleFocusWidget = (id: string) => {
-    highestZIndexRef.current += 1;
-    const nextZ = highestZIndexRef.current;
     setWidgets((prev) => {
-      const updated = prev.map((w) => (w.id === id ? { ...w, zIndex: nextZ } : w));
+      const updated = bringWidgetToFront(prev, id);
       triggerWidgetsSave(updated);
       return updated;
     });
@@ -237,24 +252,20 @@ export default function App() {
 
   // Toggle widget visibility from catalog
   const handleToggleWidget = (id: string) => {
-    highestZIndexRef.current += 1;
-    const nextZ = highestZIndexRef.current;
-
     setWidgets((prev) => {
       const existing = prev.find((w) => w.id === id || w.customId === id);
       let updated: WidgetState[];
 
       if (existing) {
-        updated = prev.map((w) =>
-          w.id === existing.id
-            ? {
-                ...w,
-                isOpen: !w.isOpen,
-                isMinimized: false,
-                zIndex: !w.isOpen ? nextZ : w.zIndex,
-              }
-            : w,
-        );
+        const nextIsOpen = !existing.isOpen;
+        if (nextIsOpen) {
+          const toggled = prev.map((w) =>
+            w.id === existing.id ? { ...w, isOpen: true, isMinimized: false } : w,
+          );
+          updated = bringWidgetToFront(toggled, existing.id);
+        } else {
+          updated = prev.map((w) => (w.id === existing.id ? { ...w, isOpen: false } : w));
+        }
       } else {
         // Check if this id belongs to a custom widget
         const customDef = customWidgets.find((cw) => cw.id === id);
@@ -269,11 +280,11 @@ export default function App() {
               x: Math.max(40, window.innerWidth / 2 - customDef.width / 2),
               y: 130,
             },
-            zIndex: nextZ,
+            zIndex: 10 + prev.length,
             size: { width: customDef.width, height: customDef.height },
             customId: customDef.id,
           };
-          updated = [...prev, newW];
+          updated = bringWidgetToFront([...prev, newW], customDef.id);
         } else {
           // Standard built-in widgets
           const defs: Record<string, { title: string; width: number; height: number; type: WidgetState['type'] }> = {
@@ -291,10 +302,10 @@ export default function App() {
             isOpen: true,
             isMinimized: false,
             position: { x: Math.max(40, window.innerWidth / 2 - 180), y: 150 },
-            zIndex: nextZ,
+            zIndex: 10 + prev.length,
             size: { width: def.width, height: def.height },
           };
-          updated = [...prev, newW];
+          updated = bringWidgetToFront([...prev, newW], id);
         }
       }
 
@@ -429,6 +440,7 @@ export default function App() {
         onToggleTheme={handleToggleTheme}
         onOpenWidgetCatalog={() => setIsWidgetCatalogOpen(true)}
         onOpenWallpaperModal={() => setIsWallpaperModalOpen(true)}
+        onResetLayout={handleResetLayout}
         activeWidgetCount={activeWidgets.length}
       />
 

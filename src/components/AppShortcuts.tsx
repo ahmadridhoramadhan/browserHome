@@ -315,8 +315,7 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
                       {/* Shortcut Link or Tile */}
                       <a
                         href={isEditing ? undefined : shortcut.url}
-                        target={isEditing ? undefined : '_blank'}
-                        rel={isEditing ? undefined : 'noopener noreferrer'}
+                        target={isEditing ? undefined : '_self'}
                         onClick={(e) => {
                           if (isEditing) {
                             e.preventDefault();

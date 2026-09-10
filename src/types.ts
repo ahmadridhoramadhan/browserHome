@@ -82,6 +82,7 @@ export interface PrayerData {
   city: string;
   latitude: number;
   longitude: number;
+  timezone?: string;
   times: PrayerTime[];
   nextPrayer: {
     name: string;

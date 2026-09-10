@@ -80,6 +80,21 @@ export function calculateOfflinePrayerTimes(
   };
 }
 
+export function getTimezoneLabel(tzString?: string, longitude?: number): string {
+  if (tzString) {
+    if (tzString.includes('Jakarta') || tzString.includes('Pontianak') || tzString === 'Asia/Bangkok') return 'WIB';
+    if (tzString.includes('Makassar') || tzString.includes('Ujung_Pandang') || tzString.includes('Bali') || tzString.includes('Kuala_Lumpur') || tzString.includes('Singapore')) return 'WITA';
+    if (tzString.includes('Jayapura')) return 'WIT';
+    if (tzString.includes('Riyadh')) return 'AST';
+  }
+  if (longitude !== undefined) {
+    if (longitude >= 95 && longitude < 115) return 'WIB';
+    if (longitude >= 115 && longitude < 125) return 'WITA';
+    if (longitude >= 125 && longitude <= 141) return 'WIT';
+  }
+  return '';
+}
+
 export async function fetchPrayerTimes(city: CityOption, date: Date = new Date()): Promise<PrayerData> {
   const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
     date.getDate(),
@@ -88,10 +103,18 @@ export async function fetchPrayerTimes(city: CityOption, date: Date = new Date()
   const cached = localStorage.getItem(cacheKey);
 
   let rawTimes: Record<string, string> | null = null;
+  let timezone: string = '';
 
   if (cached) {
     try {
-      rawTimes = JSON.parse(cached);
+      const parsed = JSON.parse(cached);
+      if (parsed.timings) {
+        rawTimes = parsed.timings;
+        timezone = parsed.timezone || '';
+      } else {
+        // legacy cache format
+        rawTimes = parsed;
+      }
     } catch {
       // ignore
     }
@@ -107,6 +130,7 @@ export async function fetchPrayerTimes(city: CityOption, date: Date = new Date()
         const json = await res.json();
         if (json && json.data && json.data.timings) {
           const t = json.data.timings;
+          timezone = json.data.meta?.timezone || '';
           rawTimes = {
             Imsak: t.Imsak?.substring(0, 5) || '04:20',
             Subuh: t.Fajr?.substring(0, 5) || '04:35',
@@ -116,7 +140,7 @@ export async function fetchPrayerTimes(city: CityOption, date: Date = new Date()
             Maghrib: t.Maghrib?.substring(0, 5) || '18:00',
             Isya: t.Isha?.substring(0, 5) || '19:10',
           };
-          localStorage.setItem(cacheKey, JSON.stringify(rawTimes));
+          localStorage.setItem(cacheKey, JSON.stringify({ timings: rawTimes, timezone }));
         }
       }
     } catch {
@@ -128,7 +152,7 @@ export async function fetchPrayerTimes(city: CityOption, date: Date = new Date()
   if (!rawTimes) {
     const tzOffsetHours = -date.getTimezoneOffset() / 60;
     rawTimes = calculateOfflinePrayerTimes(date, city.latitude, city.longitude, tzOffsetHours);
-    localStorage.setItem(cacheKey, JSON.stringify(rawTimes));
+    localStorage.setItem(cacheKey, JSON.stringify({ timings: rawTimes, timezone }));
   }
 
   const prayerDefs = [
@@ -194,6 +218,7 @@ export async function fetchPrayerTimes(city: CityOption, date: Date = new Date()
     city: city.name,
     latitude: city.latitude,
     longitude: city.longitude,
+    timezone,
     times,
     nextPrayer: nextPrayerInfo,
   };
