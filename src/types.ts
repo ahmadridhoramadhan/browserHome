@@ -38,9 +38,11 @@ export interface WidgetState {
 export interface ShortcutItem {
   id: string;
   title: string;
-  url: string;
+  url?: string;
   icon?: string;
   bgColor?: string;
+  isGroup?: boolean;
+  items?: ShortcutItem[];
 }
 
 export interface TodoItem {

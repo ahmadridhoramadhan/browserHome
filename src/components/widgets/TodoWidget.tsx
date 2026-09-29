@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Check, Trash2, Filter, CheckCircle2, Circle } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, Circle } from 'lucide-react';
 import { TodoItem } from '../../types';
 import { STORAGE_KEYS, loadFromStorage, saveToStorage, subscribeToStorage } from '../../utils/storage';
 

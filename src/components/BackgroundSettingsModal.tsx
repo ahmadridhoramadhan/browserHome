@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Image as ImageIcon, Upload, Link, Check, Sliders, Palette } from 'lucide-react';
+import { X, Upload, Link, Check, Sliders, Palette } from 'lucide-react';
 import { BackgroundConfig } from '../types';
 import { PRESET_WALLPAPERS, PRESET_GRADIENTS } from '../utils/storage';
 

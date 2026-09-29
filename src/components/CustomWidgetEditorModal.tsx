@@ -1,17 +1,12 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Code,
-  Sparkles,
   Upload,
   Play,
   Save,
-  Palette,
-  Layout,
   RefreshCw,
   Check,
-  FileCode,
-  Maximize2,
 } from 'lucide-react';
 import { CustomWidgetDef } from '../types';
 import { AVAILABLE_CUSTOM_ICONS, getCustomWidgetIcon } from '../utils/iconMap';

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Calendar, Sparkles } from 'lucide-react';
+import { Calendar, Sparkles } from 'lucide-react';
 
 export const ClockWidget: React.FC = () => {
   const [time, setTime] = useState<Date>(new Date());

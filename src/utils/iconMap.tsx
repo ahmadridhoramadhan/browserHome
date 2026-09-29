@@ -17,7 +17,6 @@ import {
   Heart,
   Compass,
   FileCode,
-  Layers,
 } from 'lucide-react';
 
 export interface IconOption {

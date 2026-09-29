@@ -9,16 +9,27 @@ import {
   Pencil,
   Check,
   GripVertical,
+  FolderPlus,
+  Folder,
 } from 'lucide-react';
 import { ShortcutItem } from '../types';
 import { AddShortcutModal } from './AddShortcutModal';
+import { GroupFolderPopup } from './GroupFolderPopup';
+import { CreateGroupModal } from './CreateGroupModal';
 import { loadFromStorage, saveToStorage, subscribeToStorage, STORAGE_KEYS } from '../utils/storage';
+import {
+  checkAndRefreshAllShortcutIcons,
+  getOrRefreshShortcutIcon,
+  handleIconFailureFallback,
+  pruneExpiredIconCache,
+} from '../utils/shortcutIconCache';
 
 interface AppShortcutsProps {
   shortcuts: ShortcutItem[];
   onAddShortcut: (shortcut: ShortcutItem) => void;
   onRemoveShortcut: (id: string) => void;
   onReorderShortcuts: (shortcuts: ShortcutItem[]) => void;
+  onUpdateShortcut?: (shortcut: ShortcutItem) => void;
 }
 
 export const AppShortcuts: React.FC<AppShortcutsProps> = ({
@@ -26,9 +37,24 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
   onAddShortcut,
   onRemoveShortcut,
   onReorderShortcuts,
+  onUpdateShortcut,
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingShortcut, setEditingShortcut] = useState<ShortcutItem | null>(null);
+
+  // Group Management states
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  const activeGroup = shortcuts.find((s) => s.id === activeGroupId && s.isGroup) || null;
+  const [popupAnchor, setPopupAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  const [targetGroupIdForAdd, setTargetGroupIdForAdd] = useState<string | null>(null);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+
+  // Active icon URL mapping (shortcut.id -> active icon URL / SVG)
+  const [iconMap, setIconMap] = useState<Record<string, string>>({});
   const [failedFaviconStages, setFailedFaviconStages] = useState<Record<string, number>>({});
+  const [refreshNotification, setRefreshNotification] = useState<string | null>(null);
+
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -41,6 +67,13 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
     return loadFromStorage<boolean>(STORAGE_KEYS.SHORTCUTS_FOLDED, false);
   });
 
+  // Check 1-month local cache and automatically refresh any expired or missing icons upon opening
+  useEffect(() => {
+    pruneExpiredIconCache();
+    const { iconMap: refreshedMap } = checkAndRefreshAllShortcutIcons(shortcuts, false);
+    setIconMap(refreshedMap);
+  }, [shortcuts]);
+
   useEffect(() => {
     const unsub = subscribeToStorage(STORAGE_KEYS.SHORTCUTS_FOLDED, (newVal) => {
       if (typeof newVal === 'boolean') {
@@ -50,7 +83,7 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
     return unsub;
   }, []);
 
-  // Drag & drop state for reordering
+  // Drag & drop state for reordering and dropping into folders
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
@@ -62,34 +95,40 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
     }
   };
 
-  const getDomain = (url: string) => {
-    try {
-      const cleanUrl = url.trim().replace(/^http:\/\//i, 'https://');
-      const parsed = new URL(cleanUrl.startsWith('http') ? cleanUrl : `https://${cleanUrl}`);
-      const hostname = parsed.hostname.toLowerCase();
-      // For WhatsApp and similar subdomains, the root domain is reliable with favicon services
-      if (hostname.endsWith('whatsapp.com')) {
-        return 'whatsapp.com';
-      }
-      return hostname;
-    } catch {
-      return url;
+  /**
+   * Handle image loading error with multistage fallback
+   */
+  const handleImageError = (shortcut: ShortcutItem) => {
+    const currentStage = failedFaviconStages[shortcut.id] || 0;
+    const nextStage = currentStage + 1;
+
+    setFailedFaviconStages((prev) => ({
+      ...prev,
+      [shortcut.id]: nextStage,
+    }));
+
+    if (nextStage <= 4) {
+      const fallbackUrl = handleIconFailureFallback(shortcut, nextStage);
+      setIconMap((prev) => ({
+        ...prev,
+        [shortcut.id]: fallbackUrl,
+      }));
     }
   };
 
-  const getFaviconUrl = (url: string, stage: number = 0) => {
-    const domain = getDomain(url);
-    if (stage === 1) {
-      return `https://icons.duckduckgo.com/ip3/${domain}.ico`;
-    }
-    return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
-  };
+  /**
+   * Force refresh a single shortcut's icon immediately
+   */
+  const handleForceRefreshSingle = (shortcut: ShortcutItem) => {
+    setFailedFaviconStages((prev) => ({ ...prev, [shortcut.id]: 0 }));
+    const result = getOrRefreshShortcutIcon(shortcut, true, 0);
+    setIconMap((prev) => ({
+      ...prev,
+      [shortcut.id]: result.iconUrl,
+    }));
 
-  const handleImageError = (id: string) => {
-    setFailedFaviconStages((prev) => {
-      const currentStage = prev[id] || 0;
-      return { ...prev, [id]: currentStage + 1 };
-    });
+    setRefreshNotification(`Icon "${shortcut.title}" diperbarui!`);
+    setTimeout(() => setRefreshNotification(null), 2500);
   };
 
   const checkScroll = useCallback(() => {
@@ -123,7 +162,6 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
   const handleWheel = (e: React.WheelEvent) => {
     const el = scrollContainerRef.current;
     if (!el) return;
-    // If horizontal or vertical wheel, scroll horizontally
     if (e.deltaY !== 0 && el.scrollWidth > el.clientWidth) {
       el.scrollLeft += e.deltaY;
       checkScroll();
@@ -170,6 +208,34 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
       return;
     }
 
+    const draggedItem = shortcuts[draggedIndex];
+    const targetItem = shortcuts[targetIndex];
+
+    // If dropped onto an existing group folder: move dragged item into that folder!
+    if (targetItem.isGroup && !draggedItem.isGroup) {
+      const updated = [...shortcuts];
+      // Remove dragged item from root
+      updated.splice(draggedIndex, 1);
+      // Find the group in the updated array
+      const groupIdx = updated.findIndex((s) => s.id === targetItem.id);
+      if (groupIdx !== -1) {
+        const currentGroup = updated[groupIdx];
+        const updatedGroup: ShortcutItem = {
+          ...currentGroup,
+          items: [...(currentGroup.items || []), draggedItem],
+        };
+        updated[groupIdx] = updatedGroup;
+        onReorderShortcuts(updated);
+
+        setRefreshNotification(`"${draggedItem.title}" dimasukkan ke grup "${targetItem.title}"`);
+        setTimeout(() => setRefreshNotification(null), 2500);
+      }
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    // Standard reorder
     const reordered = [...shortcuts];
     const [movedItem] = reordered.splice(draggedIndex, 1);
     reordered.splice(targetIndex, 0, movedItem);
@@ -184,10 +250,120 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
     setDragOverIndex(null);
   };
 
+  const handleOpenAddModal = () => {
+    setEditingShortcut(null);
+    setTargetGroupIdForAdd(null);
+    setEditingGroupId(null);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (shortcut: ShortcutItem) => {
+    setEditingShortcut(shortcut);
+    setTargetGroupIdForAdd(null);
+    setEditingGroupId(null);
+    setIsModalOpen(true);
+  };
+
+  const handleEditItemInGroup = (item: ShortcutItem, groupId: string) => {
+    setEditingGroupId(groupId);
+    setTargetGroupIdForAdd(null);
+    setEditingShortcut(item);
+    setIsModalOpen(true);
+  };
+
+  // Group Handlers
+  const handleCreateGroup = (groupTitle: string, selectedShortcutIds: string[]) => {
+    const selectedItems = shortcuts.filter((s) => selectedShortcutIds.includes(s.id));
+    const remainingShortcuts = shortcuts.filter((s) => !selectedShortcutIds.includes(s.id));
+
+    const newGroup: ShortcutItem = {
+      id: `group-${Date.now()}`,
+      title: groupTitle,
+      isGroup: true,
+      items: selectedItems,
+    };
+
+    const updated = [...remainingShortcuts, newGroup];
+    onReorderShortcuts(updated);
+
+    setRefreshNotification(`Grup "${groupTitle}" berhasil dibuat!`);
+    setTimeout(() => setRefreshNotification(null), 2500);
+  };
+
+  const handleUpdateGroup = (updatedGroup: ShortcutItem) => {
+    const updated = shortcuts.map((s) => (s.id === updatedGroup.id ? updatedGroup : s));
+    onReorderShortcuts(updated);
+  };
+
+  const handleUngroup = (groupId: string) => {
+    const groupToDissolve = shortcuts.find((s) => s.id === groupId);
+    if (!groupToDissolve) return;
+
+    const childItems = groupToDissolve.items || [];
+    const targetIndex = shortcuts.findIndex((s) => s.id === groupId);
+
+    const updated = [...shortcuts];
+    updated.splice(targetIndex, 1, ...childItems);
+    onReorderShortcuts(updated);
+    setActiveGroupId(null);
+
+    setRefreshNotification(`Grup "${groupToDissolve.title}" dibongkar ke bilah utama.`);
+    setTimeout(() => setRefreshNotification(null), 2500);
+  };
+
+  const handleRemoveItemFromGroup = (groupId: string, itemId: string, moveToDock = true) => {
+    const group = shortcuts.find((s) => s.id === groupId);
+    if (!group || !group.items) return;
+
+    const itemToRemove = group.items.find((i) => i.id === itemId);
+    const updatedItems = group.items.filter((i) => i.id !== itemId);
+    const updatedGroup = { ...group, items: updatedItems };
+
+    let updatedShortcuts = shortcuts.map((s) => (s.id === groupId ? updatedGroup : s));
+    if (moveToDock && itemToRemove) {
+      // Place the removed item next to the group
+      const groupIdx = updatedShortcuts.findIndex((s) => s.id === groupId);
+      updatedShortcuts.splice(groupIdx + 1, 0, itemToRemove);
+    }
+
+    onReorderShortcuts(updatedShortcuts);
+  };
+
+  const handleAddNewToGroup = (groupId: string) => {
+    setTargetGroupIdForAdd(groupId);
+    setEditingShortcut(null);
+    setIsModalOpen(true);
+  };
+
+  const handleSaveModalShortcut = (newShortcut: ShortcutItem) => {
+    if (targetGroupIdForAdd) {
+      // Add shortcut into the target group
+      const updated = shortcuts.map((s) => {
+        if (s.id === targetGroupIdForAdd) {
+          const currentItems = s.items || [];
+          return { ...s, items: [...currentItems, newShortcut] };
+        }
+        return s;
+      });
+      onReorderShortcuts(updated);
+      setTargetGroupIdForAdd(null);
+    } else {
+      onAddShortcut(newShortcut);
+    }
+  };
+
   return (
     <>
       <div className="flex flex-col items-center select-none w-full max-w-4xl mx-auto px-4 z-20">
-        {/* FOLDED STATE (Minimalist Bottom Pull-up Pill) */}
+        {/* Toast Notification */}
+        {refreshNotification && (
+          <div className="mb-2 px-3 py-1.5 rounded-full bg-blue-600/90 text-white text-xs font-medium shadow-lg backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-200 flex items-center gap-1.5">
+            <Check className="w-3.5 h-3.5" />
+            <span>{refreshNotification}</span>
+          </div>
+        )}
+
+        {/* FOLDED STATE */}
         {isFolded ? (
           <button
             type="button"
@@ -204,7 +380,7 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
         ) : (
           /* EXPANDED SHORTCUTS DOCK */
           <div className="relative w-full max-w-2xl sm:max-w-3xl flex flex-col rounded-2xl bg-white/45 dark:bg-neutral-900/50 backdrop-blur-md border border-white/30 dark:border-white/10 shadow-xl transition-all duration-300">
-            {/* Dock Header: Title, Edit Toggle & Fold Down Button */}
+            {/* Dock Header */}
             <div className="flex items-center justify-between px-3 pt-2 pb-1 text-xs border-b border-white/10 dark:border-white/5">
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-neutral-800 dark:text-neutral-200">
@@ -216,17 +392,30 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
 
                 {isEditing && (
                   <span className="text-[11px] font-normal text-blue-600 dark:text-blue-400 animate-pulse ml-1 hidden sm:inline">
-                    Tarik atau klik panah untuk atur urutan
+                    Tarik, ubah, atau buat grup aplikasi
                   </span>
                 )}
               </div>
 
               <div className="flex items-center gap-1.5">
+                {/* Create Group Button */}
+                {isEditing && (
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateGroupOpen(true)}
+                    title="Buat grup/folder baru untuk mengelompokkan aplikasi"
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-neutral-700 dark:text-neutral-200 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-black/5 dark:hover:bg-white/10 transition-all cursor-pointer"
+                  >
+                    <FolderPlus className="w-3.5 h-3.5 text-blue-500" />
+                    <span className="hidden sm:inline">Buat Grup</span>
+                  </button>
+                )}
+
                 {/* Toggle Edit Button */}
                 <button
                   type="button"
                   onClick={() => setIsEditing(!isEditing)}
-                  title={isEditing ? 'Selesai mengatur pintasan' : 'Atur urutan & kelola pintasan'}
+                  title={isEditing ? 'Selesai mengatur pintasan' : 'Atur urutan & kelola grup'}
                   className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
                     isEditing
                       ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'
@@ -268,7 +457,7 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
                   onClick={() => scroll('left')}
                   title="Gulir ke kiri"
                   aria-label="Gulir ke kiri"
-                  className="absolute -left-3 sm:-left-3.5 z-30 p-1.5 rounded-full bg-white/95 dark:bg-neutral-800/95 shadow-md border border-black/10 dark:border-white/10 text-neutral-700 dark:text-neutral-200 hover:scale-110 active:scale-95 transition-all"
+                  className="absolute -left-3 sm:-left-3.5 z-30 p-1.5 rounded-full bg-white/95 dark:bg-neutral-800/95 shadow-md border border-black/10 dark:border-white/10 text-neutral-700 dark:text-neutral-200 hover:scale-110 active:scale-95 transition-all cursor-pointer"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
@@ -283,9 +472,162 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
               >
                 {shortcuts.map((shortcut, index) => {
                   const stage = failedFaviconStages[shortcut.id] || 0;
-                  const hasFailed = stage >= 2;
+                  const hasFailed = stage >= 5;
                   const isBeingDragged = draggedIndex === index;
                   const isDropTarget = dragOverIndex === index && draggedIndex !== index;
+
+                  // Render Group Folder vs Standard Shortcut
+                  if (shortcut.isGroup) {
+                    const groupItems = shortcut.items || [];
+                    const previewItems = groupItems.slice(0, 4);
+
+                    return (
+                      <div
+                        key={shortcut.id}
+                        draggable={isEditing}
+                        onDragStart={(e) => handleDragStart(e, index)}
+                        onDragOver={(e) => handleDragOver(e, index)}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleDrop(e, index)}
+                        onDragEnd={handleDragEnd}
+                        className={`group relative flex flex-col items-center shrink-0 rounded-xl transition-all duration-200 ${
+                          isBeingDragged ? 'opacity-40 scale-95' : ''
+                        } ${
+                          isDropTarget
+                            ? 'ring-2 ring-blue-500 bg-blue-500/15 scale-105'
+                            : ''
+                        } ${
+                          isEditing
+                            ? 'cursor-grab active:cursor-grabbing p-1 bg-black/5 dark:bg-white/5 border border-dashed border-neutral-300 dark:border-neutral-700'
+                            : ''
+                        }`}
+                      >
+                        {/* Delete / Ungroup Button in Edit Mode */}
+                        {isEditing && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleUngroup(shortcut.id);
+                            }}
+                            title={`Bongkar/Hapus grup ${shortcut.title}`}
+                            className="absolute -top-1 -right-1 z-30 w-5 h-5 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-md transform hover:scale-110 transition-all duration-150 cursor-pointer"
+                          >
+                            <X className="w-3 h-3 stroke-[2.5]" />
+                          </button>
+                        )}
+
+                        {/* Drag Handle in Edit Mode */}
+                        {isEditing && (
+                          <div
+                            className="absolute -top-1 -left-1 z-20 p-1 text-neutral-400 dark:text-neutral-500 pointer-events-none"
+                            title="Tarik untuk memindahkan"
+                          >
+                            <GripVertical className="w-3 h-3" />
+                          </div>
+                        )}
+
+                        {/* Folder Tile Button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                            setPopupAnchor({
+                              x: rect.left + rect.width / 2,
+                              y: rect.top,
+                            });
+                            setActiveGroupId(shortcut.id);
+                          }}
+                          title={`Grup: ${shortcut.title} (${groupItems.length} aplikasi) - Klik untuk membuka`}
+                          className={`flex flex-col items-center gap-1.5 p-1 sm:p-1.5 rounded-xl transition-all duration-200 w-16 sm:w-20 cursor-pointer ${
+                            activeGroupId === shortcut.id
+                              ? 'bg-white/70 dark:bg-neutral-800/80 ring-2 ring-blue-500/40 -translate-y-0.5'
+                              : 'hover:bg-white/60 dark:hover:bg-neutral-800/70 group-hover:-translate-y-1'
+                          }`}
+                        >
+                          <div className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center shadow-md bg-white/90 dark:bg-neutral-800/90 border border-black/5 dark:border-white/10 overflow-hidden transition-transform duration-200 group-hover:scale-105 p-1.5">
+                            {groupItems.length === 0 ? (
+                              <Folder className="w-5 h-5 text-blue-500" />
+                            ) : (
+                              /* 2x2 Mini Apps Grid */
+                              <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-1 items-center justify-center">
+                                {previewItems.map((child) => {
+                                  const childIcon =
+                                    iconMap[child.id] || getOrRefreshShortcutIcon(child, false, 0).iconUrl;
+                                  return (
+                                    <div
+                                      key={child.id}
+                                      className="w-full h-full rounded-sm flex items-center justify-center bg-neutral-200/60 dark:bg-neutral-700/60 overflow-hidden"
+                                    >
+                                      <img
+                                        src={childIcon}
+                                        alt=""
+                                        className="w-3 h-3 sm:w-3.5 sm:h-3.5 object-contain"
+                                      />
+                                    </div>
+                                  );
+                                })}
+                                {/* Placeholders if less than 4 */}
+                                {Array.from({ length: Math.max(0, 4 - previewItems.length) }).map((_, i) => (
+                                  <div
+                                    key={i}
+                                    className="w-full h-full rounded-sm bg-neutral-200/40 dark:bg-neutral-700/40 opacity-40"
+                                  />
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Badge count */}
+                            <span className="absolute bottom-0.5 right-1 text-[9px] font-bold text-neutral-500 dark:text-neutral-400">
+                              {groupItems.length}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1 max-w-full">
+                            <span className="text-[11px] font-medium text-neutral-800 dark:text-neutral-200 truncate drop-shadow-sm">
+                              {shortcut.title}
+                            </span>
+                          </div>
+                        </button>
+
+                        {/* Reorder Arrows in Edit Mode */}
+                        {isEditing && (
+                          <div className="flex items-center gap-1 mt-0.5 pb-0.5">
+                            <button
+                              type="button"
+                              disabled={index === 0}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                moveShortcut(index, 'left');
+                              }}
+                              title="Pindah ke kiri"
+                              className="p-1 rounded bg-white/80 dark:bg-neutral-800/80 text-neutral-700 dark:text-neutral-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blue-500 hover:text-white transition-colors shadow-xs"
+                            >
+                              <ChevronLeft className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={index === shortcuts.length - 1}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                moveShortcut(index, 'right');
+                              }}
+                              title="Pindah ke kanan"
+                              className="p-1 rounded bg-white/80 dark:bg-neutral-800/80 text-neutral-700 dark:text-neutral-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blue-500 hover:text-white transition-colors shadow-xs"
+                            >
+                              <ChevronRight className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  // Standard Single Shortcut
+                  const iconSrc = iconMap[shortcut.id] || getOrRefreshShortcutIcon(shortcut, false, stage).iconUrl;
 
                   return (
                     <div
@@ -308,26 +650,40 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
                           : ''
                       }`}
                     >
-                      {/* Delete Button (ONLY visible when isEditing === true) */}
+                      {/* Action Buttons in Edit Mode: Pencil beside X */}
                       {isEditing && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            onRemoveShortcut(shortcut.id);
-                          }}
-                          title={`Hapus ${shortcut.title}`}
-                          className="absolute -top-1 -right-1 z-30 w-5 h-5 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-md transform hover:scale-110 transition-all duration-150 cursor-pointer"
-                        >
-                          <X className="w-3 h-3 stroke-[2.5]" />
-                        </button>
+                        <div className="absolute -top-1 -right-1 z-30 flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleOpenEditModal(shortcut);
+                            }}
+                            title={`Edit ${shortcut.title} (URL, Nama, Icon)`}
+                            className="w-5 h-5 rounded-full bg-blue-500 hover:bg-blue-600 text-white flex items-center justify-center shadow-md transform hover:scale-110 transition-all duration-150 cursor-pointer"
+                          >
+                            <Pencil className="w-2.5 h-2.5 stroke-[2.5]" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              onRemoveShortcut(shortcut.id);
+                            }}
+                            title={`Hapus ${shortcut.title}`}
+                            className="w-5 h-5 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-md transform hover:scale-110 transition-all duration-150 cursor-pointer"
+                          >
+                            <X className="w-3 h-3 stroke-[2.5]" />
+                          </button>
+                        </div>
                       )}
 
-                      {/* Drag Handle Indicator in Edit Mode */}
+                      {/* Drag Handle in Edit Mode */}
                       {isEditing && (
                         <div
-                          className="absolute top-1 left-1 z-20 text-neutral-400 dark:text-neutral-500 pointer-events-none"
+                          className="absolute -top-1 -left-1 z-20 p-1 text-neutral-400 dark:text-neutral-500 pointer-events-none"
                           title="Tarik untuk memindahkan"
                         >
                           <GripVertical className="w-3 h-3" />
@@ -351,15 +707,15 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
                         }`}
                       >
                         <div
-                          className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center shadow-md border border-black/5 dark:border-white/10 overflow-hidden transition-transform duration-200 group-hover:scale-105"
-                          style={{ backgroundColor: shortcut.bgColor || 'rgba(255, 255, 255, 0.9)' }}
+                          className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center shadow-md bg-white/90 dark:bg-neutral-800/90 border border-black/5 dark:border-white/10 overflow-hidden transition-transform duration-200 group-hover:scale-105"
+                          style={shortcut.bgColor ? { backgroundColor: shortcut.bgColor } : undefined}
                         >
                           {!hasFailed ? (
                             <img
-                              key={`${shortcut.id}-${stage}`}
-                              src={getFaviconUrl(shortcut.url, stage)}
+                              key={`${shortcut.id}-${stage}-${iconSrc}`}
+                              src={iconSrc}
                               alt={shortcut.title}
-                              onError={() => handleImageError(shortcut.id)}
+                              onError={() => handleImageError(shortcut)}
                               className="w-6 h-6 sm:w-7 sm:h-7 object-contain"
                               referrerPolicy="no-referrer"
                             />
@@ -386,7 +742,7 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
                               moveShortcut(index, 'left');
                             }}
                             title="Pindah ke kiri"
-                            className="p-1 rounded bg-white/80 dark:bg-neutral-800/80 text-neutral-700 dark:text-neutral-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blue-500 hover:text-white dark:hover:bg-blue-500 transition-colors shadow-xs"
+                            className="p-1 rounded bg-white/80 dark:bg-neutral-800/80 text-neutral-700 dark:text-neutral-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blue-500 hover:text-white transition-colors shadow-xs"
                           >
                             <ChevronLeft className="w-3 h-3" />
                           </button>
@@ -399,7 +755,7 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
                               moveShortcut(index, 'right');
                             }}
                             title="Pindah ke kanan"
-                            className="p-1 rounded bg-white/80 dark:bg-neutral-800/80 text-neutral-700 dark:text-neutral-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blue-500 hover:text-white dark:hover:bg-blue-500 transition-colors shadow-xs"
+                            className="p-1 rounded bg-white/80 dark:bg-neutral-800/80 text-neutral-700 dark:text-neutral-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blue-500 hover:text-white transition-colors shadow-xs"
                           >
                             <ChevronRight className="w-3 h-3" />
                           </button>
@@ -413,7 +769,7 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
                 <div className="flex flex-col items-center shrink-0">
                   <button
                     type="button"
-                    onClick={() => setIsModalOpen(true)}
+                    onClick={handleOpenAddModal}
                     title="Tambah Pintasan Baru"
                     className="flex flex-col items-center gap-1.5 p-1 sm:p-1.5 rounded-xl hover:bg-white/60 dark:hover:bg-neutral-800/70 transition-all duration-200 hover:-translate-y-1 w-16 sm:w-20 group cursor-pointer"
                   >
@@ -434,7 +790,7 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
                   onClick={() => scroll('right')}
                   title="Gulir ke kanan"
                   aria-label="Gulir ke kanan"
-                  className="absolute -right-3 sm:-right-3.5 z-30 p-1.5 rounded-full bg-white/95 dark:bg-neutral-800/95 shadow-md border border-black/10 dark:border-white/10 text-neutral-700 dark:text-neutral-200 hover:scale-110 active:scale-95 transition-all"
+                  className="absolute -right-3 sm:-right-3.5 z-30 p-1.5 rounded-full bg-white/95 dark:bg-neutral-800/95 shadow-md border border-black/10 dark:border-white/10 text-neutral-700 dark:text-neutral-200 hover:scale-110 active:scale-95 transition-all cursor-pointer"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
@@ -444,10 +800,62 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
         )}
       </div>
 
+      {/* Add / Edit Shortcut Modal */}
       <AddShortcutModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onAdd={onAddShortcut}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingShortcut(null);
+          setTargetGroupIdForAdd(null);
+          setEditingGroupId(null);
+        }}
+        onAdd={handleSaveModalShortcut}
+        editingShortcut={editingShortcut}
+        onUpdate={(updated) => {
+          if (editingGroupId) {
+            // Update child item inside group folder
+            const updatedShortcuts = shortcuts.map((s) => {
+              if (s.id === editingGroupId && s.items) {
+                const newItems = s.items.map((child) => (child.id === updated.id ? updated : child));
+                return { ...s, items: newItems };
+              }
+              return s;
+            });
+            onReorderShortcuts(updatedShortcuts);
+            setEditingGroupId(null);
+          } else if (onUpdateShortcut) {
+            onUpdateShortcut(updated);
+          }
+          handleForceRefreshSingle(updated);
+        }}
+      />
+
+      {/* Group Folder Popover Popup */}
+      <GroupFolderPopup
+        isOpen={Boolean(activeGroup)}
+        onClose={() => {
+          setActiveGroupId(null);
+          setPopupAnchor(null);
+        }}
+        group={activeGroup}
+        anchor={popupAnchor}
+        onUpdateGroup={handleUpdateGroup}
+        onUngroup={handleUngroup}
+        onAddNewToGroup={handleAddNewToGroup}
+        onRemoveItemFromGroup={handleRemoveItemFromGroup}
+        onEditItem={handleEditItemInGroup}
+        iconMap={iconMap}
+        onImageError={handleImageError}
+        isParentEditing={isEditing}
+      />
+
+      {/* Create Group Modal */}
+      <CreateGroupModal
+        isOpen={isCreateGroupOpen}
+        onClose={() => setIsCreateGroupOpen(false)}
+        availableShortcuts={shortcuts}
+        onCreateGroup={handleCreateGroup}
+        iconMap={iconMap}
       />
     </>
   );

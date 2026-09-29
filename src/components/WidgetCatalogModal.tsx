@@ -12,7 +12,6 @@ import {
   Code,
   Edit3,
   Trash2,
-  Sparkles,
 } from 'lucide-react';
 import { CustomWidgetDef, WidgetState } from '../types';
 import { getCustomWidgetIcon } from '../utils/iconMap';

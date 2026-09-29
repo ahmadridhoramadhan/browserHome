@@ -7,27 +7,20 @@ import {
   ChevronDown,
   Cloud,
 } from 'lucide-react';
-import { ThemeMode } from '../types';
 
 interface TopBarProps {
-  theme?: ThemeMode;
-  onToggleTheme?: () => void;
   onOpenWidgetCatalog: () => void;
   onOpenWallpaperModal: () => void;
   onOpenSyncModal?: () => void;
-  onResetLayout?: () => void;
   activeWidgetCount: number;
   isFolded?: boolean;
   onToggleFold: (folded: boolean) => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
-  theme,
-  onToggleTheme,
   onOpenWidgetCatalog,
   onOpenWallpaperModal,
   onOpenSyncModal,
-  onResetLayout,
   activeWidgetCount,
   isFolded = false,
   onToggleFold,

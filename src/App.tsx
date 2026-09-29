@@ -63,7 +63,25 @@ export default function App() {
 
   // Shortcuts state
   const [shortcuts, setShortcuts] = useState<ShortcutItem[]>(() => {
-    return loadFromStorage<ShortcutItem[]>(STORAGE_KEYS.SHORTCUTS, DEFAULT_SHORTCUTS);
+    const raw = loadFromStorage<ShortcutItem[]>(STORAGE_KEYS.SHORTCUTS, DEFAULT_SHORTCUTS);
+    const legacyDomainColors = [
+      '#4285F4', '#FF0000', '#EA4335', '#24292e', '#10A37F',
+      '#25D366', '#333333', '#000000', '#4C1D95', '#0F9D58',
+      '#F4B400', '#7248B9',
+    ];
+    let hasLegacy = false;
+    const sanitized = raw.map((s) => {
+      if (s.bgColor && legacyDomainColors.includes(s.bgColor)) {
+        hasLegacy = true;
+        const { bgColor, ...rest } = s;
+        return rest;
+      }
+      return s;
+    });
+    if (hasLegacy) {
+      saveToStorage(STORAGE_KEYS.SHORTCUTS, sanitized);
+    }
+    return sanitized;
   });
 
   // Custom widgets definitions state
@@ -204,10 +222,6 @@ export default function App() {
     }, 400);
   }, []);
 
-  const handleToggleTheme = () => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
-  };
-
   const handleBackgroundChange = (newBg: BackgroundConfig) => {
     setBackground(newBg);
     saveToStorage(STORAGE_KEYS.BACKGROUND, newBg);
@@ -228,6 +242,12 @@ export default function App() {
   const handleReorderShortcuts = (reordered: ShortcutItem[]) => {
     setShortcuts(reordered);
     saveToStorage(STORAGE_KEYS.SHORTCUTS, reordered);
+  };
+
+  const handleUpdateShortcut = (updatedShortcut: ShortcutItem) => {
+    const updated = shortcuts.map((s) => (s.id === updatedShortcut.id ? updatedShortcut : s));
+    setShortcuts(updated);
+    saveToStorage(STORAGE_KEYS.SHORTCUTS, updated);
   };
 
   // Custom Widgets Management
@@ -541,12 +561,9 @@ export default function App() {
 
       {/* Top Application Bar */}
       <TopBar
-        theme={theme}
-        onToggleTheme={handleToggleTheme}
         onOpenWidgetCatalog={() => setIsWidgetCatalogOpen(true)}
         onOpenWallpaperModal={() => setIsWallpaperModalOpen(true)}
         onOpenSyncModal={() => setIsSyncModalOpen(true)}
-        onResetLayout={handleResetLayout}
         activeWidgetCount={activeWidgets.length}
         isFolded={isTopBarFolded}
         onToggleFold={handleToggleTopBarFold}
@@ -610,6 +627,7 @@ export default function App() {
             onAddShortcut={handleAddShortcut}
             onRemoveShortcut={handleRemoveShortcut}
             onReorderShortcuts={handleReorderShortcuts}
+            onUpdateShortcut={handleUpdateShortcut}
           />
         </div>
       </main>

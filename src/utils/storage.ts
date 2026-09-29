@@ -1,4 +1,4 @@
-import { BackgroundConfig, ShortcutItem, ThemeMode, TodoItem, WidgetState } from '../types';
+import { BackgroundConfig, ShortcutItem, WidgetState } from '../types';
 
 export const STORAGE_KEYS = {
   THEME: 'chrome_home_theme',
@@ -18,14 +18,14 @@ export const STORAGE_KEYS = {
 };
 
 export const DEFAULT_SHORTCUTS: ShortcutItem[] = [
-  { id: '1', title: 'Google', url: 'https://www.google.com', bgColor: '#4285F4' },
-  { id: '2', title: 'YouTube', url: 'https://www.youtube.com', bgColor: '#FF0000' },
-  { id: '3', title: 'Gmail', url: 'https://mail.google.com', bgColor: '#EA4335' },
-  { id: '4', title: 'GitHub', url: 'https://github.com', bgColor: '#24292e' },
-  { id: '5', title: 'ChatGPT', url: 'https://chatgpt.com', bgColor: '#10A37F' },
-  { id: '6', title: 'WhatsApp', url: 'https://web.whatsapp.com', bgColor: '#25D366' },
-  { id: '7', title: 'Wikipedia', url: 'https://id.wikipedia.org', bgColor: '#333333' },
-  { id: '8', title: 'Twitter / X', url: 'https://x.com', bgColor: '#000000' },
+  { id: '1', title: 'Google', url: 'https://www.google.com' },
+  { id: '2', title: 'YouTube', url: 'https://www.youtube.com' },
+  { id: '3', title: 'Gmail', url: 'https://mail.google.com' },
+  { id: '4', title: 'GitHub', url: 'https://github.com' },
+  { id: '5', title: 'ChatGPT', url: 'https://chatgpt.com' },
+  { id: '6', title: 'WhatsApp', url: 'https://web.whatsapp.com' },
+  { id: '7', title: 'Wikipedia', url: 'https://id.wikipedia.org' },
+  { id: '8', title: 'Twitter / X', url: 'https://x.com' },
 ];
 
 export const DEFAULT_BACKGROUND: BackgroundConfig = {
