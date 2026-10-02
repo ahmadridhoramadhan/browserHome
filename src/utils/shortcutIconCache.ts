@@ -15,7 +15,7 @@ import {
 } from './shortcutIconResolver';
 
 export const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
-export const SHORTCUT_ICON_CACHE_KEY = 'chrome_home_shortcut_icon_cache_v2';
+export const SHORTCUT_ICON_CACHE_KEY = 'chrome_home_shortcut_icon_cache_v5';
 
 export interface CachedIconEntry {
   iconUrl: string;
@@ -28,13 +28,95 @@ export interface CachedIconEntry {
 export type ShortcutIconCacheMap = Record<string, CachedIconEntry>;
 
 /**
+ * Check if a URL belongs to a broken service (DuckDuckGo SSL error in ID)
+ * or obsolete Google S2 (which flattens all subdomains into a generic root logo or returns broken globes).
+ */
+export function isOutdatedOrBrokenIconUrl(url?: string): boolean {
+  if (!url) return true;
+  return url.includes('duckduckgo.com') || url.includes('/s2/favicons');
+}
+
+/**
+ * Normalize any input URL into a full URL with scheme for favicon querying
+ */
+export function normalizeUrlForFavicon(rawUrl: string): string {
+  if (!rawUrl) return '';
+  const trimmed = rawUrl.trim();
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+}
+
+/**
+ * Generate a clean inline SVG Data URL with the initial letter of the website/title
+ * Used as the ultimate offline/fallback icon so users never see broken images.
+ */
+export function generateLetterFallbackIcon(title: string, domain: string): string {
+  const char = (title || domain || '?').trim().charAt(0).toUpperCase();
+  let hash = 0;
+  const str = domain || title || 'app';
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hues = [210, 220, 260, 280, 330, 350, 25, 45, 140, 160, 180];
+  const hue = hues[Math.abs(hash) % hues.length];
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+    <rect width="64" height="64" rx="14" fill="hsl(${hue}, 65%, 45%)"/>
+    <text x="32" y="42" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="32" font-weight="bold" fill="#ffffff" text-anchor="middle">${char}</text>
+  </svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+/**
  * Load the local icon cache from localStorage
  */
 export function getLocalIconCache(): ShortcutIconCacheMap {
   try {
+    // Clean old caches if present
+    if (typeof window !== 'undefined' && window.localStorage) {
+      ['chrome_home_shortcut_icon_cache_v1', 'chrome_home_shortcut_icon_cache_v2', 'chrome_home_shortcut_icon_cache_v3', 'chrome_home_shortcut_icon_cache_v4'].forEach((oldKey) => {
+        const oldVal = localStorage.getItem(oldKey);
+        if (oldVal) {
+          try {
+            const parsed = JSON.parse(oldVal) as ShortcutIconCacheMap;
+            const current = localStorage.getItem(SHORTCUT_ICON_CACHE_KEY);
+            if (!current && parsed && typeof parsed === 'object') {
+              const migrated: ShortcutIconCacheMap = {};
+              Object.keys(parsed).forEach((k) => {
+                const item = parsed[k];
+                if (item && item.iconUrl && !isOutdatedOrBrokenIconUrl(item.iconUrl)) {
+                  migrated[k] = item;
+                }
+              });
+              localStorage.setItem(SHORTCUT_ICON_CACHE_KEY, JSON.stringify(migrated));
+            }
+          } catch {
+            // ignore migration parse error
+          }
+          localStorage.removeItem(oldKey);
+        }
+      });
+    }
+
     const raw = localStorage.getItem(SHORTCUT_ICON_CACHE_KEY);
     if (!raw) return {};
-    return JSON.parse(raw) as ShortcutIconCacheMap;
+    const cache = JSON.parse(raw) as ShortcutIconCacheMap;
+
+    // Purge any outdated or broken URLs that may have been cached
+    let hasPurged = false;
+    Object.keys(cache).forEach((id) => {
+      if (isOutdatedOrBrokenIconUrl(cache[id]?.iconUrl)) {
+        delete cache[id];
+        hasPurged = true;
+      }
+    });
+    if (hasPurged) {
+      localStorage.setItem(SHORTCUT_ICON_CACHE_KEY, JSON.stringify(cache));
+    }
+
+    return cache;
   } catch (err) {
     console.warn('Failed to parse local shortcut icon cache:', err);
     return {};
@@ -63,7 +145,7 @@ export function pruneExpiredIconCache(): void {
 
     Object.keys(cache).forEach((id) => {
       const entry = cache[id];
-      if (!entry || !entry.cachedAt) {
+      if (!entry || !entry.cachedAt || isOutdatedOrBrokenIconUrl(entry.iconUrl)) {
         delete cache[id];
         hasChanges = true;
         return;
@@ -85,38 +167,50 @@ export function pruneExpiredIconCache(): void {
 
 /**
  * Generate favicon source for any URL uniformly:
- * Stage 0: DuckDuckGo favicon API (extracts real icon from page tags, highly reliable for Bilibili, Google, etc.)
- * Stage 1: DuckDuckGo with base domain
- * Stage 2: Google S2 service with domain
- * Stage 3: Google S2 service with baseDomain
- * Stage 4: Direct origin /favicon.ico
- * Stage 5: Unavatar service
+ * Stage 0: Unavatar HTML-crawler with Google Chromium Favicon V2 fallback (extracts actual <link rel="icon"> from page source, resolving complex video/app sites like Bstation, WhatsApp, etc.)
+ * Stage 1: Google Chromium Favicon V2 with FULL URL (extracts specific icons for subdomains like docs, drive, mail, stitch, in 128px high-res)
+ * Stage 2: Google Chromium Favicon V2 with Origin (e.g. https://web.whatsapp.com or https://www.bilibili.tv)
+ * Stage 3: Direct origin /favicon.ico
+ * Stage 4: Icon Horse high-resolution CDN
+ * Stage 5+: Clean SVG letter fallback
  */
 export function generateFaviconUrl(url: string, stage: number = 0): string {
+  const normalizedUrl = normalizeUrlForFavicon(url);
   const domain = getDomainFromUrl(url);
   const baseDomain = getBaseDomainFromUrl(url);
   const origin = getOriginFromUrl(url);
 
+  const googleV2Full = `https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=${encodeURIComponent(normalizedUrl)}&size=128`;
+
   switch (stage) {
     case 0:
-      return `https://icons.duckduckgo.com/ip3/${domain}.ico`;
+      // Stage 0: Real HTML <link rel="icon"> resolver via unavatar with Google V2 fallback
+      return `https://unavatar.io/${domain}?fallback=${encodeURIComponent(googleV2Full)}`;
     case 1:
-      return `https://icons.duckduckgo.com/ip3/${baseDomain}.ico`;
+      // Stage 1: Direct Google Chromium Favicon V2 with full URL (docs, drive, mail, etc.)
+      return googleV2Full;
     case 2:
-      return `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+      // Stage 2: Direct Google Chromium Favicon V2 with origin
+      return `https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=${encodeURIComponent(origin)}&size=128`;
     case 3:
-      return `https://www.google.com/s2/favicons?domain=${baseDomain}&sz=128`;
-    case 4:
+      // Stage 3: Direct origin /favicon.ico
       return `${origin}/favicon.ico`;
+    case 4:
+      // Stage 4: Icon Horse CDN
+      return `https://icon.horse/icon/${encodeURIComponent(domain)}`;
+    case 5:
+      // Stage 5: Google Chromium Favicon V2 with Base Domain
+      return `https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=${encodeURIComponent('https://' + baseDomain)}&size=128`;
     default:
-      return `https://icons.duckduckgo.com/ip3/${baseDomain}.ico`;
+      return googleV2Full;
   }
 }
 
 /**
  * Resolve icon URL for a shortcut item uniformly:
  * 1. User custom icon in shortcutItem.icon
- * 2. Uniform Favicon for ALL sites (no hardcoded special brand icons)
+ * 2. Uniform Favicon for ALL sites (fair, unbiased, no hardcoded special brand icons)
+ * 3. Graceful SVG Letter Fallback if online stages fail
  */
 export function resolveIconForShortcut(
   shortcut: ShortcutItem,
@@ -132,7 +226,16 @@ export function resolveIconForShortcut(
     return { iconUrl: shortcut.icon.trim(), source: 'custom' };
   }
 
-  // 2. Uniform Favicon Query (same for Bilibili, Google, YouTube, etc.)
+  // 2. Beyond stage 5 -> return local SVG Letter fallback (no network failure possible)
+  if (stage >= 6) {
+    const domain = getDomainFromUrl(shortcut.url);
+    return {
+      iconUrl: generateLetterFallbackIcon(shortcut.title, domain),
+      source: 'fallback',
+    };
+  }
+
+  // 3. Uniform Favicon Query
   const faviconUrl = generateFaviconUrl(shortcut.url, stage);
   return { iconUrl: faviconUrl, source: 'favicon' };
 }
@@ -153,13 +256,15 @@ export function getOrRefreshShortcutIcon(
 
   const isExpired = !cachedEntry || now - cachedEntry.cachedAt >= ONE_MONTH_MS;
   const isUrlChanged = cachedEntry && cachedEntry.url !== shortcut.url;
+  const isInvalid = cachedEntry && isOutdatedOrBrokenIconUrl(cachedEntry.iconUrl);
 
-  // Use cached icon if valid, not forced, URL hasn't changed, and not from legacy brand special icon
+  // Use cached icon if valid, not forced, URL hasn't changed, and not invalid service
   if (
     cachedEntry &&
     !isExpired &&
     !forceRefresh &&
     !isUrlChanged &&
+    !isInvalid &&
     cachedEntry.source !== ('brand' as unknown) &&
     stage === (cachedEntry.stage || 0)
   ) {
@@ -177,7 +282,7 @@ export function getOrRefreshShortcutIcon(
     iconUrl: resolved.iconUrl,
     cachedAt: now,
     source: resolved.source,
-    url: shortcut.url,
+    url: shortcut.url || '',
     stage,
   };
   saveLocalIconCache(cache);
@@ -227,17 +332,18 @@ export function checkAndRefreshAllShortcutIcons(
     const isExpired = !entry || now - entry.cachedAt >= ONE_MONTH_MS;
     const isUrlChanged = entry && entry.url !== shortcut.url;
     const isLegacyBrand = entry && (entry.source as string) === 'brand';
+    const isInvalidService = entry && isOutdatedOrBrokenIconUrl(entry.iconUrl);
 
-    if (entry && !isExpired && !forceRefreshAll && !isUrlChanged && !isLegacyBrand) {
+    if (entry && !isExpired && !forceRefreshAll && !isUrlChanged && !isLegacyBrand && !isInvalidService) {
       iconMap[shortcut.id] = entry.iconUrl;
     } else {
-      // Cache expired, legacy brand, or missing -> refresh upon opening
+      // Cache expired, legacy brand, invalid service, or missing -> refresh upon opening
       const resolved = resolveIconForShortcut(shortcut, 0);
       cache[shortcut.id] = {
         iconUrl: resolved.iconUrl,
         cachedAt: now,
         source: resolved.source,
-        url: shortcut.url,
+        url: shortcut.url || '',
         stage: 0,
       };
       iconMap[shortcut.id] = resolved.iconUrl;
@@ -268,7 +374,7 @@ export function handleIconFailureFallback(
     iconUrl: resolved.iconUrl,
     cachedAt: now,
     source: resolved.source,
-    url: shortcut.url,
+    url: shortcut.url || '',
     stage: nextStage,
   };
   saveLocalIconCache(cache);

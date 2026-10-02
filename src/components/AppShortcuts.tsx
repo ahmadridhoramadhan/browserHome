@@ -107,7 +107,7 @@ export const AppShortcuts: React.FC<AppShortcutsProps> = ({
       [shortcut.id]: nextStage,
     }));
 
-    if (nextStage <= 4) {
+    if (nextStage <= 6) {
       const fallbackUrl = handleIconFailureFallback(shortcut, nextStage);
       setIconMap((prev) => ({
         ...prev,
