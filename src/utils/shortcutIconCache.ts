@@ -12,10 +12,12 @@ import {
   getDomainFromUrl,
   getBaseDomainFromUrl,
   getOriginFromUrl,
+  stripUserSessionFromUrl,
+  resolveSubServiceIcon,
 } from './shortcutIconResolver';
 
 export const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
-export const SHORTCUT_ICON_CACHE_KEY = 'chrome_home_shortcut_icon_cache_v5';
+export const SHORTCUT_ICON_CACHE_KEY = 'chrome_home_shortcut_icon_cache_v6';
 
 export interface CachedIconEntry {
   iconUrl: string;
@@ -76,7 +78,7 @@ export function getLocalIconCache(): ShortcutIconCacheMap {
   try {
     // Clean old caches if present
     if (typeof window !== 'undefined' && window.localStorage) {
-      ['chrome_home_shortcut_icon_cache_v1', 'chrome_home_shortcut_icon_cache_v2', 'chrome_home_shortcut_icon_cache_v3', 'chrome_home_shortcut_icon_cache_v4'].forEach((oldKey) => {
+      ['chrome_home_shortcut_icon_cache_v1', 'chrome_home_shortcut_icon_cache_v2', 'chrome_home_shortcut_icon_cache_v3', 'chrome_home_shortcut_icon_cache_v4', 'chrome_home_shortcut_icon_cache_v5'].forEach((oldKey) => {
         const oldVal = localStorage.getItem(oldKey);
         if (oldVal) {
           try {
@@ -176,11 +178,12 @@ export function pruneExpiredIconCache(): void {
  */
 export function generateFaviconUrl(url: string, stage: number = 0): string {
   const normalizedUrl = normalizeUrlForFavicon(url);
+  const cleanUrl = stripUserSessionFromUrl(normalizedUrl);
   const domain = getDomainFromUrl(url);
   const baseDomain = getBaseDomainFromUrl(url);
   const origin = getOriginFromUrl(url);
 
-  const googleV2Full = `https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=${encodeURIComponent(normalizedUrl)}&size=128`;
+  const googleV2Full = `https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=${encodeURIComponent(cleanUrl)}&size=128`;
 
   switch (stage) {
     case 0:
@@ -209,8 +212,9 @@ export function generateFaviconUrl(url: string, stage: number = 0): string {
 /**
  * Resolve icon URL for a shortcut item uniformly:
  * 1. User custom icon in shortcutItem.icon
- * 2. Uniform Favicon for ALL sites (fair, unbiased, no hardcoded special brand icons)
- * 3. Graceful SVG Letter Fallback if online stages fail
+ * 2. Multi-product suite sub-service detection (e.g. Google Vids, Docs, Sheets, Slides, Forms, Office 365)
+ * 3. Uniform Favicon for ALL sites (fair, unbiased, no hardcoded special brand icons)
+ * 4. Graceful SVG Letter Fallback if online stages fail
  */
 export function resolveIconForShortcut(
   shortcut: ShortcutItem,
@@ -226,7 +230,15 @@ export function resolveIconForShortcut(
     return { iconUrl: shortcut.icon.trim(), source: 'custom' };
   }
 
-  // 2. Beyond stage 5 -> return local SVG Letter fallback (no network failure possible)
+  // 2. Multi-product suite sub-service resolution (only on initial stage 0)
+  if (stage === 0) {
+    const subServiceIcon = resolveSubServiceIcon(shortcut.url);
+    if (subServiceIcon) {
+      return { iconUrl: subServiceIcon, source: 'favicon' };
+    }
+  }
+
+  // 3. Beyond stage 5 -> return local SVG Letter fallback (no network failure possible)
   if (stage >= 6) {
     const domain = getDomainFromUrl(shortcut.url);
     return {
@@ -235,7 +247,7 @@ export function resolveIconForShortcut(
     };
   }
 
-  // 3. Uniform Favicon Query
+  // 4. Uniform Favicon Query
   const faviconUrl = generateFaviconUrl(shortcut.url, stage);
   return { iconUrl: faviconUrl, source: 'favicon' };
 }
